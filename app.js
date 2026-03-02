@@ -471,12 +471,18 @@
       }
       const response = await fetch("/.netlify/functions/analyze-cv", {
         method: "POST",
+        headers: {
+          Accept: "application/json"
+        },
         body: formData
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const error = new Error(payload.error || "analysis-failed");
+        const detailMessage = payload.details && payload.details.message ? payload.details.message : "";
+        const friendlyMessage = `${response.status} - ${payload.error || "analysis-failed"}${detailMessage ? `: ${detailMessage}` : ""}`;
+        const error = new Error(friendlyMessage);
         error.status = response.status;
+        error.payload = payload;
         throw error;
       }
       return payload;
