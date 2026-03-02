@@ -49,6 +49,180 @@
       city: "Riyadh"
     }
   };
+  const SKILL_LIBRARY = {
+    Frontend: [
+      { name: "HTML", aliases: ["html", "html5"] },
+      { name: "CSS", aliases: ["css", "css3"] },
+      { name: "Sass", aliases: ["sass", "scss"] },
+      { name: "Less", aliases: ["less"] },
+      { name: "JavaScript", aliases: ["javascript", "js", "ecmascript"] },
+      { name: "TypeScript", aliases: ["typescript", "ts"] },
+      { name: "React", aliases: ["react", "react.js", "reactjs"] },
+      { name: "Next.js", aliases: ["next.js", "nextjs"] },
+      { name: "Vue.js", aliases: ["vue", "vue.js", "vuejs"] },
+      { name: "Nuxt.js", aliases: ["nuxt", "nuxt.js", "nuxtjs"] },
+      { name: "Angular", aliases: ["angular", "angularjs"] },
+      { name: "Svelte", aliases: ["svelte"] },
+      { name: "Redux", aliases: ["redux"] },
+      { name: "Zustand", aliases: ["zustand"] },
+      { name: "Tailwind CSS", aliases: ["tailwind", "tailwind css"] },
+      { name: "Bootstrap", aliases: ["bootstrap"] },
+      { name: "Material UI", aliases: ["material ui", "mui"] },
+      { name: "jQuery", aliases: ["jquery"] },
+      { name: "Responsive Design", aliases: ["responsive design", "responsive", "mobile-first"] },
+      { name: "Web Accessibility", aliases: ["accessibility", "a11y", "web accessibility"] },
+      { name: "Webpack", aliases: ["webpack"] },
+      { name: "Vite", aliases: ["vite"] },
+      { name: "Git", aliases: ["git", "github", "gitlab"] }
+    ],
+    Backend: [
+      { name: "Node.js", aliases: ["node.js", "nodejs", "node"] },
+      { name: "Express.js", aliases: ["express", "express.js"] },
+      { name: "NestJS", aliases: ["nestjs", "nest.js"] },
+      { name: "Python", aliases: ["python"] },
+      { name: "Django", aliases: ["django"] },
+      { name: "Flask", aliases: ["flask"] },
+      { name: "FastAPI", aliases: ["fastapi"] },
+      { name: "Java", aliases: ["java"] },
+      { name: "Spring Boot", aliases: ["spring boot", "springboot"] },
+      { name: "C#", aliases: ["c#", "csharp"] },
+      { name: ".NET", aliases: [".net", "dotnet", "asp.net"] },
+      { name: "PHP", aliases: ["php"] },
+      { name: "Laravel", aliases: ["laravel"] },
+      { name: "Ruby", aliases: ["ruby"] },
+      { name: "Ruby on Rails", aliases: ["rails", "ruby on rails"] },
+      { name: "Go", aliases: ["golang", "go language", "go "] },
+      { name: "REST APIs", aliases: ["rest api", "restful", "api development"] },
+      { name: "GraphQL", aliases: ["graphql"] },
+      { name: "Microservices", aliases: ["microservices", "microservice"] },
+      { name: "Docker", aliases: ["docker"] },
+      { name: "Kubernetes", aliases: ["kubernetes", "k8s"] },
+      { name: "Redis", aliases: ["redis"] }
+    ],
+    Data: [
+      { name: "SQL", aliases: ["sql"] },
+      { name: "MySQL", aliases: ["mysql"] },
+      { name: "PostgreSQL", aliases: ["postgresql", "postgres", "postgre"] },
+      { name: "SQL Server", aliases: ["sql server", "mssql"] },
+      { name: "Oracle", aliases: ["oracle db", "oracle"] },
+      { name: "MongoDB", aliases: ["mongodb", "mongo"] },
+      { name: "SQLite", aliases: ["sqlite"] },
+      { name: "Power BI", aliases: ["power bi", "powerbi"] },
+      { name: "Tableau", aliases: ["tableau"] },
+      { name: "Excel", aliases: ["excel", "microsoft excel"] },
+      { name: "Google Sheets", aliases: ["google sheets", "sheets"] },
+      { name: "Python Pandas", aliases: ["pandas"] },
+      { name: "NumPy", aliases: ["numpy"] },
+      { name: "Matplotlib", aliases: ["matplotlib"] },
+      { name: "Seaborn", aliases: ["seaborn"] },
+      { name: "Jupyter", aliases: ["jupyter", "jupyter notebook"] },
+      { name: "Data Visualization", aliases: ["data visualization", "dashboarding"] },
+      { name: "ETL", aliases: ["etl", "data pipeline"] },
+      { name: "Data Warehousing", aliases: ["data warehouse", "data warehousing"] },
+      { name: "Machine Learning", aliases: ["machine learning", "ml"] },
+      { name: "Statistics", aliases: ["statistics", "statistical analysis"] },
+      { name: "A/B Testing", aliases: ["a/b testing", "ab testing"] }
+    ],
+    Cybersecurity: [
+      { name: "Cybersecurity", aliases: ["cybersecurity", "cyber security", "information security"] },
+      { name: "Network Security", aliases: ["network security"] },
+      { name: "Application Security", aliases: ["application security", "appsec"] },
+      { name: "Cloud Security", aliases: ["cloud security"] },
+      { name: "SOC Analysis", aliases: ["soc", "soc analyst", "security operations center"] },
+      { name: "SIEM", aliases: ["siem", "splunk", "qradar"] },
+      { name: "Incident Response", aliases: ["incident response", "ir"] },
+      { name: "Threat Hunting", aliases: ["threat hunting", "threat hunt"] },
+      { name: "Threat Intelligence", aliases: ["threat intelligence"] },
+      { name: "Vulnerability Assessment", aliases: ["vulnerability assessment", "vulnerability scanning"] },
+      { name: "Penetration Testing", aliases: ["penetration testing", "pentest", "pen testing"] },
+      { name: "OWASP", aliases: ["owasp"] },
+      { name: "IAM", aliases: ["iam", "identity and access management"] },
+      { name: "Firewalls", aliases: ["firewall", "firewalls"] },
+      { name: "EDR", aliases: ["edr", "endpoint detection and response"] },
+      { name: "Zero Trust", aliases: ["zero trust"] },
+      { name: "NIST", aliases: ["nist"] },
+      { name: "ISO 27001", aliases: ["iso 27001", "iso27001"] },
+      { name: "Risk Assessment", aliases: ["risk assessment"] },
+      { name: "Security Awareness", aliases: ["security awareness"] },
+      { name: "Malware Analysis", aliases: ["malware analysis"] },
+      { name: "Digital Forensics", aliases: ["digital forensics", "forensics"] }
+    ],
+    "UI/UX": [
+      { name: "UI Design", aliases: ["ui design", "user interface design"] },
+      { name: "UX Design", aliases: ["ux design", "user experience design"] },
+      { name: "Figma", aliases: ["figma"] },
+      { name: "Adobe XD", aliases: ["adobe xd", "xd"] },
+      { name: "Sketch", aliases: ["sketch"] },
+      { name: "Wireframing", aliases: ["wireframing", "wireframes"] },
+      { name: "Prototyping", aliases: ["prototyping", "prototype"] },
+      { name: "User Research", aliases: ["user research"] },
+      { name: "Usability Testing", aliases: ["usability testing", "usability test"] },
+      { name: "Design Systems", aliases: ["design systems", "design system"] },
+      { name: "Interaction Design", aliases: ["interaction design", "ixd"] },
+      { name: "Information Architecture", aliases: ["information architecture", "ia"] },
+      { name: "Visual Design", aliases: ["visual design"] },
+      { name: "Typography", aliases: ["typography"] },
+      { name: "Color Theory", aliases: ["color theory", "colour theory"] },
+      { name: "Responsive UI", aliases: ["responsive ui", "responsive layouts"] },
+      { name: "Accessibility Design", aliases: ["accessible design", "accessibility design"] },
+      { name: "User Flows", aliases: ["user flows", "flow mapping"] },
+      { name: "Journey Mapping", aliases: ["journey mapping", "customer journey"] },
+      { name: "Heuristic Evaluation", aliases: ["heuristic evaluation"] },
+      { name: "A/B Testing Design", aliases: ["design experiments", "a/b testing design"] },
+      { name: "Content Design", aliases: ["content design", "ux writing"] }
+    ],
+    "Soft Skills": [
+      { name: "Communication", aliases: ["communication", "communicator", "التواصل"] },
+      { name: "Presentation", aliases: ["presentation", "presenting"] },
+      { name: "Leadership", aliases: ["leadership", "team lead"] },
+      { name: "Teamwork", aliases: ["teamwork", "team player", "collaboration"] },
+      { name: "Problem Solving", aliases: ["problem solving", "problem-solving"] },
+      { name: "Critical Thinking", aliases: ["critical thinking"] },
+      { name: "Adaptability", aliases: ["adaptability", "adaptable"] },
+      { name: "Time Management", aliases: ["time management"] },
+      { name: "Project Management", aliases: ["project management"] },
+      { name: "Stakeholder Management", aliases: ["stakeholder management"] },
+      { name: "Agile", aliases: ["agile"] },
+      { name: "Scrum", aliases: ["scrum"] },
+      { name: "Kanban", aliases: ["kanban"] },
+      { name: "Mentoring", aliases: ["mentoring", "mentor"] },
+      { name: "Negotiation", aliases: ["negotiation"] },
+      { name: "Customer Service", aliases: ["customer service", "customer support"] },
+      { name: "Documentation", aliases: ["documentation", "technical writing"] },
+      { name: "Attention to Detail", aliases: ["attention to detail", "detail-oriented"] },
+      { name: "Decision Making", aliases: ["decision making"] },
+      { name: "Conflict Resolution", aliases: ["conflict resolution"] },
+      { name: "Business Analysis", aliases: ["business analysis", "requirements gathering"] },
+      { name: "Product Thinking", aliases: ["product thinking", "product mindset"] }
+    ]
+  };
+  const ROLE_SKILL_PROFILES = {
+    "Frontend Developer": {
+      required: [
+        ["HTML", 1.2], ["CSS", 1.2], ["JavaScript", 1.3], ["React", 1.4], ["TypeScript", 1.1], ["Responsive Design", 1.0], ["Web Accessibility", 0.9], ["Git", 0.7]
+      ]
+    },
+    "Backend Developer": {
+      required: [
+        ["Node.js", 1.2], ["Express.js", 1.1], ["SQL", 1.0], ["PostgreSQL", 1.0], ["REST APIs", 1.3], ["Docker", 0.9], ["Redis", 0.8], ["Microservices", 0.9]
+      ]
+    },
+    "Data Analyst": {
+      required: [
+        ["SQL", 1.3], ["Excel", 1.0], ["Power BI", 1.2], ["Tableau", 0.9], ["Statistics", 1.0], ["Data Visualization", 1.0], ["Python", 0.8], ["A/B Testing", 0.8]
+      ]
+    },
+    "UI/UX Designer": {
+      required: [
+        ["UI Design", 1.2], ["UX Design", 1.2], ["Figma", 1.3], ["Wireframing", 1.0], ["Prototyping", 1.1], ["User Research", 0.9], ["Design Systems", 0.9], ["Usability Testing", 0.9]
+      ]
+    },
+    "Cybersecurity Analyst": {
+      required: [
+        ["Cybersecurity", 1.2], ["Network Security", 1.1], ["SIEM", 1.1], ["Incident Response", 1.0], ["Vulnerability Assessment", 1.0], ["Risk Assessment", 0.9], ["NIST", 0.8], ["Firewalls", 0.8]
+      ]
+    }
+  };
 
   function readStore(key, fallback) {
     try {
@@ -99,6 +273,7 @@
         labDraftAnswer: "",
         behaviorDraftAnswer: "",
         cvStatusMessage: "",
+        selectedTargetRole: "Frontend Developer",
         authRole: "student",
         authDrafts: {
           login: {
@@ -352,7 +527,7 @@
             email: profile.email,
             password: "",
             companyName: profile.name,
-            cv: profile.cv || (existing ? existing.cv : null),
+            cvAnalysis: profile.cvAnalysis || (existing ? existing.cvAnalysis : null),
             city: "Riyadh"
           }
         : {
@@ -362,13 +537,13 @@
             nameEn: profile.name,
             email: profile.email,
             password: "",
-            cv: profile.cv || (existing ? existing.cv : null),
+            cvAnalysis: profile.cvAnalysis || (existing ? existing.cvAnalysis : null),
             city: "Riyadh",
             targetRoleAr: "محترف رقمي",
             targetRoleEn: "Digital Professional",
             experience: 0,
-            topSkills: profile.cv && profile.cv.parsed && profile.cv.parsed.skills && profile.cv.parsed.skills.length
-              ? profile.cv.parsed.skills
+            topSkills: profile.cvAnalysis && profile.cvAnalysis.skills && profile.cvAnalysis.skills.length
+              ? profile.cvAnalysis.skills.map((item) => item.name)
               : (existing && existing.topSkills ? existing.topSkills : []),
             portfolio: existing && existing.portfolio ? existing.portfolio : [],
             badges: existing && existing.badges ? existing.badges : []
@@ -420,27 +595,276 @@
       return signOut(auth);
     }
 
-    buildCvSummaryMarkup(cvData) {
-      if (!cvData || (!cvData.parsed && !cvData.aiAnalysis)) {
-        return `<p class="muted">${this.state.settings.language === "ar" ? "ارفع سيرتك عشان نحللها" : "Upload your CV to analyze it."}</p>`;
+    async extractTextFromPdf(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pages = [];
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        const page = await pdf.getPage(pageNumber);
+        const textContent = await page.getTextContent();
+        pages.push(textContent.items.map((item) => item.str).join(" "));
       }
-      const parsed = cvData.parsed || { email: "", phone: "", linkedin: "", skills: [] };
-      const aiAnalysis = cvData.aiAnalysis || null;
-      const previewText = (cvData.rawText || "").slice(0, 1200);
+      return pages.join("\n\n").replace(/\s+/g, " ").trim();
+    }
+
+    extractSection(text, headings) {
+      const source = String(text || "");
+      const allHeadings = [
+        "education", "academic", "qualification", "qualifications", "experience", "work experience", "employment",
+        "projects", "project", "portfolio", "skills", "technical skills", "certifications", "summary", "profile",
+        "التعليم", "المؤهلات", "الخبرة", "الخبرات", "المشاريع", "المهارات", "الملخص"
+      ];
+      const headingPattern = headings.join("|");
+      const stopPattern = allHeadings.filter((item) => !headings.includes(item)).join("|");
+      const regex = new RegExp(`(?:^|\\n)\\s*(?:${headingPattern})\\s*[:\\-]?\\s*([\\s\\S]{0,1200}?)(?=\\n\\s*(?:${stopPattern})\\s*[:\\-]?|$)`, "i");
+      const match = source.match(regex);
+      return match ? match[1].trim() : "";
+    }
+
+    extractYearsOfExperience(text) {
+      const regex = /(\d+)\+?\s*(?:years|year|yrs|yr|سنة|سنوات)/gi;
+      let maxYears = 0;
+      let match = regex.exec(text);
+      while (match) {
+        maxYears = Math.max(maxYears, Number(match[1] || 0));
+        match = regex.exec(text);
+      }
+      if (/سنتين|عامين/i.test(text)) {
+        maxYears = Math.max(maxYears, 2);
+      }
+      if (/ثلاث سنوات|3 سنوات/i.test(text)) {
+        maxYears = Math.max(maxYears, 3);
+      }
+      return maxYears;
+    }
+
+    parseCvText(text) {
+      const normalized = String(text || "");
+      const emailMatch = normalized.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      const phoneMatch = normalized.match(/(?:\+9665\d{8}|05\d{8})/);
+      const linkedinMatch = normalized.match(/https?:\/\/(?:www\.)?linkedin\.com\/[^\s)]+/i);
+      const education = this.extractSection(normalized, ["education", "academic", "qualification", "qualifications", "التعليم", "المؤهلات"]);
+      const experience = this.extractSection(normalized, ["experience", "work experience", "employment", "الخبرة", "الخبرات"]);
+      const projects = this.extractSection(normalized, ["projects", "project", "portfolio", "المشاريع"]);
+      const years = this.extractYearsOfExperience(normalized);
+      let seniority = "Beginner";
+      if (/intern|internship|trainee|متدرب/i.test(normalized)) {
+        seniority = "Intern";
+      } else if (years >= 4) {
+        seniority = "Mid";
+      } else if (years >= 1) {
+        seniority = "Junior";
+      }
+      return {
+        email: emailMatch ? emailMatch[0] : "",
+        phone: phoneMatch ? phoneMatch[0] : "",
+        linkedin: linkedinMatch ? linkedinMatch[0] : "",
+        education,
+        experience,
+        projects,
+        yearsOfExperience: years,
+        seniority
+      };
+    }
+
+    countAliasOccurrences(text, alias) {
+      const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(^|[^A-Za-z0-9+.#-])${escaped}(?=$|[^A-Za-z0-9+.#-])`, "gi");
+      const matches = String(text || "").match(regex);
+      return matches ? matches.length : 0;
+    }
+
+    detectSkills(text) {
+      const source = String(text || "");
+      const lower = source.toLowerCase();
+      const emphasizedTerms = /(advanced|expert|proficient|strong|certified|professional|متقدم|خبير|محترف|معتمد)/i;
+      const detected = [];
+
+      Object.entries(SKILL_LIBRARY).forEach(([category, entries]) => {
+        entries.forEach((entry) => {
+          let frequency = 0;
+          entry.aliases.forEach((alias) => {
+            frequency += this.countAliasOccurrences(lower, alias.toLowerCase());
+          });
+          if (!frequency) {
+            return;
+          }
+
+          const joinedAliases = entry.aliases.map((alias) => alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+          const emphasisRegex = new RegExp(`(?:${joinedAliases}).{0,20}(advanced|expert|proficient|strong|certified|professional|متقدم|خبير|محترف|معتمد)|(advanced|expert|proficient|strong|certified|professional|متقدم|خبير|محترف|معتمد).{0,20}(?:${joinedAliases})`, "i");
+          const yearsRegex = new RegExp(`(?:${joinedAliases}).{0,25}(\\d+)\\+?\\s*(?:years|year|yrs|سنة|سنوات)|(\\d+)\\+?\\s*(?:years|year|yrs|سنة|سنوات).{0,25}(?:${joinedAliases})`, "i");
+          const emphasis = emphasisRegex.test(source) || emphasizedTerms.test(source);
+          const yearsMatch = source.match(yearsRegex);
+          const years = yearsMatch ? Number(yearsMatch[1] || yearsMatch[2] || 0) : 0;
+          const confidence = clamp(Number((0.35 + Math.min(frequency, 4) * 0.12 + (emphasis ? 0.18 : 0) + Math.min(years, 5) * 0.06).toFixed(2)), 0, 1);
+
+          let level = "Beginner";
+          if (years >= 4 || emphasis || frequency >= 4) {
+            level = "Advanced";
+          } else if (years >= 2 || frequency >= 2) {
+            level = "Intermediate";
+          }
+
+          detected.push({
+            name: entry.name,
+            category,
+            confidence,
+            level,
+            frequency
+          });
+        });
+      });
+
+      return detected.sort((a, b) => b.confidence - a.confidence || b.frequency - a.frequency);
+    }
+
+    scoreCvAnalysis(parsedProfile, skills) {
+      const completenessRaw = [
+        parsedProfile.email ? 25 : 0,
+        parsedProfile.phone ? 20 : 0,
+        parsedProfile.linkedin ? 20 : 0,
+        parsedProfile.education ? 35 : 0
+      ].reduce((sum, part) => sum + part, 0);
+      const categoryCount = new Set(skills.map((skill) => skill.category)).size;
+      const breadthRaw = Math.min(60, skills.length * 3) + Math.min(20, categoryCount * 4);
+      const advancedCount = skills.filter((skill) => skill.level === "Advanced").length;
+      const technicalScore = clamp(Math.round(breadthRaw + Math.min(20, advancedCount * 4)), 0, 100);
+      const projectsScore = parsedProfile.projects
+        ? clamp(Math.min(100, 35 + parsedProfile.projects.split(/\n|•|-/).filter(Boolean).length * 15), 0, 100)
+        : 0;
+      const experienceScore = parsedProfile.seniority === "Mid"
+        ? 90
+        : parsedProfile.seniority === "Junior"
+          ? 65
+          : parsedProfile.seniority === "Intern"
+            ? 40
+            : clamp(parsedProfile.yearsOfExperience * 15, 0, 55);
+      const total = clamp(Math.round(technicalScore * 0.4 + completenessRaw * 0.25 + projectsScore * 0.2 + experienceScore * 0.15), 0, 100);
+      return {
+        TechnicalScore: technicalScore,
+        ProfileCompleteness: completenessRaw,
+        ProjectsScore: projectsScore,
+        ExperienceScore: experienceScore,
+        TotalScore: total
+      };
+    }
+
+    computeRoleMatches(skills) {
+      const skillMap = new Map(skills.map((skill) => [skill.name.toLowerCase(), skill]));
+      return Object.entries(ROLE_SKILL_PROFILES).map(([role, config]) => {
+        const totalWeight = config.required.reduce((sum, [, weight]) => sum + weight, 0);
+        let achievedWeight = 0;
+        const missingSkills = [];
+        config.required.forEach(([skillName, weight]) => {
+          const found = skillMap.get(skillName.toLowerCase());
+          if (found) {
+            const levelBoost = found.level === "Advanced" ? 1 : found.level === "Intermediate" ? 0.8 : 0.6;
+            achievedWeight += weight * levelBoost;
+          } else {
+            missingSkills.push(skillName);
+          }
+        });
+        return {
+          role,
+          match: clamp(Math.round((achievedWeight / totalWeight) * 100), 0, 100),
+          missingSkills
+        };
+      }).sort((a, b) => b.match - a.match);
+    }
+
+    buildDevelopmentPlan(targetRole, matches) {
+      const match = matches.find((item) => item.role === targetRole) || matches[0] || { role: targetRole, missingSkills: [] };
+      const gaps = match.missingSkills.slice(0, 4);
+      const defaults = ["أساسيات المجال", "ممارسة عملية", "تحسين جودة التنفيذ", "تجهيز ملف أعمال"];
+      const weeks = [1, 2, 3, 4].map((week, index) => {
+        const gap = gaps[index] || defaults[index];
+        return {
+          week,
+          focus: gap,
+          task: this.state.settings.language === "ar"
+            ? `خصص 45-60 دقيقة يومياً لتعلّم ${gap} وتطبيقه عملياً.`
+            : `Spend 45-60 minutes daily learning and practicing ${gap}.`,
+          resource: this.state.settings.language === "ar"
+            ? `ابحث عن دورة تمهيدية ومقال توثيقي عن ${gap}.`
+            : `Use one beginner course and one official reference for ${gap}.`
+        };
+      });
+      const projectIdea = this.state.settings.language === "ar"
+        ? `نفّذ مشروعاً مصغراً بعنوان: ${targetRole} Starter Case يبرز ${gaps[0] || "المهارات الأساسية"} و${gaps[1] || "التنفيذ العملي"}.`
+        : `Build a mini "${targetRole} Starter Case" portfolio piece highlighting ${gaps[0] || "core skills"} and ${gaps[1] || "practical execution"}.`;
+      return {
+        targetRole: match.role,
+        weeks,
+        projectIdea
+      };
+    }
+
+    buildCvAnalysis(text, targetRole) {
+      const parsedProfile = this.parseCvText(text);
+      const skills = this.detectSkills(text);
+      const scores = this.scoreCvAnalysis(parsedProfile, skills);
+      const matches = this.computeRoleMatches(skills);
+      const plan = this.buildDevelopmentPlan(targetRole, matches);
+      return {
+        rawTextPreview: text.slice(0, 1500),
+        parsedProfile,
+        skills,
+        scores,
+        matches,
+        plan
+      };
+    }
+
+    buildCvSummaryMarkup(cvAnalysis) {
+      if (!cvAnalysis) {
+        return `<div id="cvPreview"><p class="muted">${this.state.settings.language === "ar" ? "ارفع سيرتك عشان نحللها" : "Upload your CV to analyze it."}</p></div>`;
+      }
+      const parsedProfile = cvAnalysis.parsedProfile || {};
+      const scores = cvAnalysis.scores || { TechnicalScore: 0, ProfileCompleteness: 0, ProjectsScore: 0, TotalScore: 0 };
+      const plan = cvAnalysis.plan || { targetRole: this.state.selectedTargetRole, weeks: [], projectIdea: "" };
+      const grouped = Object.keys(SKILL_LIBRARY).map((category) => {
+        const items = (cvAnalysis.skills || []).filter((skill) => skill.category === category);
+        if (!items.length) {
+          return "";
+        }
+        return `
+          <div class="stack">
+            <p><strong>${category}</strong></p>
+            <div class="chip-row">
+              ${items.map((skill) => `<span class="chip">${skill.name} · ${skill.level} · ${Math.round(skill.confidence * 100)}%</span>`).join("")}
+            </div>
+          </div>
+        `;
+      }).join("");
+      const topMatches = (cvAnalysis.matches || []).slice(0, 3);
+      const targetMatch = (cvAnalysis.matches || []).find((item) => item.role === plan.targetRole) || topMatches[0] || { missingSkills: [] };
       return `
         <div class="stack">
-          ${aiAnalysis ? `
-            <p><strong>${this.state.settings.language === "ar" ? "الملخص" : "Summary"}:</strong> ${aiAnalysis.summary || "-"}</p>
-            <p><strong>${this.state.settings.language === "ar" ? "الدور المقترح" : "Suggested role"}:</strong> ${aiAnalysis.suggested_role || "-"}</p>
-            <p><strong>${this.state.settings.language === "ar" ? "المهارات الأساسية" : "Key skills"}:</strong> ${(aiAnalysis.skills || []).length ? aiAnalysis.skills.join(" , ") : "-"}</p>
-            <p><strong>${this.state.settings.language === "ar" ? "المهارات الناقصة" : "Missing skills"}:</strong> ${(aiAnalysis.missing_skills || []).length ? aiAnalysis.missing_skills.join(" , ") : "-"}</p>
-            <p><strong>${this.state.settings.language === "ar" ? "اقتراحات التحسين" : "Suggestions"}:</strong> ${(aiAnalysis.suggestions || []).length ? aiAnalysis.suggestions.join(" | ") : "-"}</p>
-          ` : ""}
-          <p><strong>Email:</strong> ${parsed.email || "-"}</p>
-          <p><strong>${this.state.settings.language === "ar" ? "الجوال" : "Phone"}:</strong> ${parsed.phone || "-"}</p>
-          <p><strong>LinkedIn:</strong> ${parsed.linkedin || "-"}</p>
-          <p><strong>${this.state.settings.language === "ar" ? "المهارات" : "Skills"}:</strong> ${parsed.skills.length ? parsed.skills.join(" , ") : "-"}</p>
-          <div id="cvPreview" class="code-block">${previewText || (this.state.settings.language === "ar" ? "لا يوجد نص معاينة متاح." : "No preview text available.")}</div>
+          <p><strong>Email:</strong> ${parsedProfile.email || "-"}</p>
+          <p><strong>${this.state.settings.language === "ar" ? "الجوال" : "Phone"}:</strong> ${parsedProfile.phone || "-"}</p>
+          <p><strong>LinkedIn:</strong> ${parsedProfile.linkedin || "-"}</p>
+          <p><strong>${this.state.settings.language === "ar" ? "التعليم" : "Education"}:</strong> ${parsedProfile.education || "-"}</p>
+          <p><strong>${this.state.settings.language === "ar" ? "الخبرة" : "Experience"}:</strong> ${parsedProfile.experience || "-"}</p>
+          <p><strong>${this.state.settings.language === "ar" ? "المشاريع" : "Projects"}:</strong> ${parsedProfile.projects || "-"}</p>
+          ${grouped}
+          <div class="stack">
+            <p><strong>${this.state.settings.language === "ar" ? "تفصيل الدرجات" : "Score breakdown"}</strong></p>
+            <p>Technical: ${scores.TechnicalScore} | Profile: ${scores.ProfileCompleteness} | Projects: ${scores.ProjectsScore} | Total: ${scores.TotalScore}</p>
+          </div>
+          <div class="stack">
+            <p><strong>${this.state.settings.language === "ar" ? "أفضل الأدوار المطابقة" : "Top role matches"}</strong></p>
+            ${topMatches.map((match) => `<p>${match.role}: ${match.match}%</p>`).join("")}
+          </div>
+          <div class="stack">
+            <p><strong>${this.state.settings.language === "ar" ? "فجوات المهارات للدور المختار" : "Missing skills for selected role"}</strong></p>
+            <p>${targetMatch.missingSkills.length ? targetMatch.missingSkills.join(" , ") : (this.state.settings.language === "ar" ? "لا توجد فجوات حرجة" : "No major gaps")}</p>
+          </div>
+          <div class="stack">
+            <p><strong>${this.state.settings.language === "ar" ? "خطة 4 أسابيع" : "4-week plan"}</strong></p>
+            ${plan.weeks.map((week) => `<p>${this.state.settings.language === "ar" ? `الأسبوع ${week.week}` : `Week ${week.week}`}: ${week.focus} - ${week.task} - ${week.resource}</p>`).join("")}
+            <p><strong>${this.state.settings.language === "ar" ? "فكرة مشروع" : "Portfolio idea"}:</strong> ${plan.projectIdea || "-"}</p>
+          </div>
+          <div id="cvPreview" class="code-block">${cvAnalysis.rawTextPreview || "-"}</div>
         </div>
       `;
     }
@@ -453,39 +877,18 @@
       await setDoc(
         doc(db, "users", currentAuthUser.uid),
         {
-          cv: {
-            rawText: cvPayload.rawText || "",
-            parsed: cvPayload.parsed || { email: "", phone: "", linkedin: "", skills: [] },
-            aiAnalysis: cvPayload.aiAnalysis || null,
+          cvAnalysis: {
+            rawTextPreview: cvPayload.rawTextPreview || "",
+            parsedProfile: cvPayload.parsedProfile || null,
+            skills: cvPayload.skills || [],
+            scores: cvPayload.scores || null,
+            matches: cvPayload.matches || [],
+            plan: cvPayload.plan || null,
             updatedAt: serverTimestamp()
           }
         },
         { merge: true }
       );
-    }
-
-    async requestCvAnalysis(file) {
-      const formData = new FormData();
-      if (file) {
-        formData.append("file", file);
-      }
-      const response = await fetch("/.netlify/functions/analyze-cv", {
-        method: "POST",
-        headers: {
-          Accept: "application/json"
-        },
-        body: formData
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const detailMessage = payload.details && payload.details.message ? payload.details.message : "";
-        const friendlyMessage = `${response.status} - ${payload.error || "analysis-failed"}${detailMessage ? `: ${detailMessage}` : ""}`;
-        const error = new Error(friendlyMessage);
-        error.status = response.status;
-        error.payload = payload;
-        throw error;
-      }
-      return payload;
     }
 
     bindFirebaseSession() {
@@ -602,6 +1005,11 @@
         if (event.target.matches("[data-plan-check]")) {
           this.handlePlanCheck(event.target);
         }
+        if (event.target.matches("#cvTargetRole")) {
+          this.state.selectedTargetRole = event.target.value;
+          this.render();
+          return;
+        }
         if (event.target.matches('input[name="lab-answer"]')) {
           this.state.labDraftAnswer = event.target.value;
         }
@@ -715,40 +1123,31 @@
         this.state.cvStatusMessage = "جاري قراءة السيرة وتحليلها...";
         this.render();
 
-        this.requestCvAnalysis(file)
-          .then(async (analysisResult) => {
-            const skills = Array.isArray(analysisResult.skills) ? analysisResult.skills : [];
-            const cvPayload = {
-              rawText: analysisResult.raw_text_preview || "",
-              parsed: {
-                email: "",
-                phone: "",
-                linkedin: "",
-                skills
-              },
-              aiAnalysis: {
-                summary: analysisResult.summary || "",
-                suggested_role: analysisResult.suggested_role || "",
-                skills,
-                missing_skills: Array.isArray(analysisResult.missing_skills) ? analysisResult.missing_skills : [],
-                suggestions: Array.isArray(analysisResult.suggestions) ? analysisResult.suggestions : []
-              }
-            };
-            await this.saveCvToFirestore(cvPayload);
+        this.extractTextFromPdf(file)
+          .then(async (rawText) => {
+            if (rawText.length < 50) {
+              this.state.cvStatusMessage = "ما قدرت أطلع نص واضح من الـ PDF. ممكن يكون سكان/صورة.";
+              this.state.cvUploadPending = false;
+              this.render();
+              return;
+            }
+            const selectedRole = document.getElementById("cvTargetRole") ? document.getElementById("cvTargetRole").value : this.state.selectedTargetRole;
+            const cvAnalysis = this.buildCvAnalysis(rawText, selectedRole);
+            await this.saveCvToFirestore(cvAnalysis);
 
             const currentUser = this.currentUser();
             if (currentUser) {
-              currentUser.cv = cvPayload;
+              currentUser.cvAnalysis = cvAnalysis;
               if (currentUser.role === "student") {
-                currentUser.topSkills = skills.length ? skills : currentUser.topSkills;
+                currentUser.topSkills = cvAnalysis.skills.slice(0, 8).map((skill) => skill.name);
                 const progressSafe = this.currentProgress();
                 if (progressSafe) {
                   progressSafe.cvUploaded = true;
                   progressSafe.cvAnalysis = {
-                    skills,
-                    seniority: "Entry",
-                    recommendedRoles: [this.altRole(currentUser)],
-                    baseScore: clamp(skills.length * 6, 18, 60)
+                    skills: currentUser.topSkills,
+                    seniority: cvAnalysis.parsedProfile.seniority || "Entry",
+                    recommendedRoles: cvAnalysis.matches.slice(0, 2).map((match) => match.role),
+                    baseScore: clamp(Math.round(cvAnalysis.scores.TotalScore * 0.6), 0, 60)
                   };
                   if (!progressSafe.badges.includes("CV Verified")) {
                     progressSafe.badges.push("CV Verified");
@@ -1467,8 +1866,8 @@
       const matches = this.getMatchesForUser(user).slice(0, 5);
       const gaps = this.getSkillGaps(user);
       const analysis = progress.cvAnalysis;
-      const cvSkills = user.cv && user.cv.parsed && user.cv.parsed.skills && user.cv.parsed.skills.length
-        ? user.cv.parsed.skills
+      const cvSkills = user.cvAnalysis && user.cvAnalysis.skills && user.cvAnalysis.skills.length
+        ? user.cvAnalysis.skills.slice(0, 10).map((skill) => skill.name)
         : (analysis ? analysis.skills : []);
       return `
         <section class="page-head tight">
@@ -1526,7 +1925,7 @@
       const user = this.currentUser();
       const progress = this.currentProgress();
       const analysis = progress ? progress.cvAnalysis : null;
-      const cvData = user && user.cv ? user.cv : null;
+      const cvData = user && user.cvAnalysis ? user.cvAnalysis : null;
       return `
         <section class="page-head">
           <h1>${this.t("uploadCv")}</h1>
@@ -1537,6 +1936,9 @@
             <div class="dropzone-inner">
               <strong>${this.state.settings.language === "ar" ? "اختر ملف PDF من جهازك" : "Choose a PDF from your device"}</strong>
               <p>PDF</p>
+              <select id="cvTargetRole">
+                ${Object.keys(ROLE_SKILL_PROFILES).map((role) => `<option value="${role}" ${this.state.selectedTargetRole === role ? "selected" : ""}>${role}</option>`).join("")}
+              </select>
               <input type="file" accept="application/pdf" id="cvInput">
               <button class="btn btn-primary" id="analyzeCvBtn" type="button" data-action="analyze-cv">${this.state.cvUploadPending ? "جاري التحليل..." : "حلّل السيرة"}</button>
               <p id="cvStatus" class="muted">${this.state.cvStatusMessage || (this.state.settings.language === "ar" ? "لن يتم رفع الملف إلى أي خادم." : "The file stays in your browser.")}</p>
@@ -1553,7 +1955,7 @@
                 <p><strong>${this.state.settings.language === "ar" ? "أدوار مقترحة" : "Recommended roles"}:</strong> ${analysis.recommendedRoles.join(" / ")}</p>
                 <div id="cvPreview" class="code-block">${this.state.settings.language === "ar" ? "التحليل المحلي سيعرض هنا بعد قراءة ملف PDF." : "Local PDF analysis will appear here."}</div>
               </div>
-            ` : `<div id="cvPreview"><p class="muted">${this.t("empty")}</p></div>`}
+            ` : `<div id="cvPreview"><p class="muted">${this.state.settings.language === "ar" ? "ارفع سيرتك عشان نحللها" : "Upload your CV to analyze it."}</p></div>`}
           </article>
         </section>
       `;
