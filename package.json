@@ -1,0 +1,9 @@
+{
+  "name": "tamheed",
+  "private": true,
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "openai": "^4.104.0",
+    "pdf-parse": "^1.1.1"
+  }
+}

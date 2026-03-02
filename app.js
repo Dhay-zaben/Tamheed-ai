@@ -420,65 +420,27 @@
       return signOut(auth);
     }
 
-    async extractTextFromPdf(file) {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const pages = [];
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-        const page = await pdf.getPage(pageNumber);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item) => item.str).join(" ").trim();
-        pages.push(pageText);
-      }
-      return pages.join("\n\n").replace(/\s+/g, " ").trim();
-    }
-
-    parseCvText(text) {
-      const normalized = String(text || "");
-      const emailMatch = normalized.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-      const phoneMatch = normalized.match(/(?:\+9665\d{8}|05\d{8})/);
-      const linkedinMatch = normalized.match(/https?:\/\/(?:www\.)?linkedin\.com\/[^\s)]+/i);
-      const keywords = [
-        "JavaScript",
-        "HTML",
-        "CSS",
-        "React",
-        "Node",
-        "Python",
-        "Java",
-        "SQL",
-        "Power BI",
-        "Figma",
-        "UI",
-        "UX",
-        "System Design",
-        "Cybersecurity",
-        "AWS",
-        "Azure"
-      ];
-      const lower = normalized.toLowerCase();
-      const skills = keywords.filter((skill) => lower.includes(skill.toLowerCase()));
-      return {
-        email: emailMatch ? emailMatch[0] : "",
-        phone: phoneMatch ? phoneMatch[0] : "",
-        linkedin: linkedinMatch ? linkedinMatch[0] : "",
-        skills
-      };
-    }
-
     buildCvSummaryMarkup(cvData) {
-      if (!cvData || !cvData.parsed) {
+      if (!cvData || (!cvData.parsed && !cvData.aiAnalysis)) {
         return `<p class="muted">${this.state.settings.language === "ar" ? "ارفع سيرتك عشان نحللها" : "Upload your CV to analyze it."}</p>`;
       }
-      const parsed = cvData.parsed;
-      const previewText = (cvData.rawText || "").slice(0, 1000);
+      const parsed = cvData.parsed || { email: "", phone: "", linkedin: "", skills: [] };
+      const aiAnalysis = cvData.aiAnalysis || null;
+      const previewText = (cvData.rawText || "").slice(0, 1200);
       return `
         <div class="stack">
+          ${aiAnalysis ? `
+            <p><strong>${this.state.settings.language === "ar" ? "الملخص" : "Summary"}:</strong> ${aiAnalysis.summary || "-"}</p>
+            <p><strong>${this.state.settings.language === "ar" ? "الدور المقترح" : "Suggested role"}:</strong> ${aiAnalysis.suggested_role || "-"}</p>
+            <p><strong>${this.state.settings.language === "ar" ? "المهارات الأساسية" : "Key skills"}:</strong> ${(aiAnalysis.skills || []).length ? aiAnalysis.skills.join(" , ") : "-"}</p>
+            <p><strong>${this.state.settings.language === "ar" ? "المهارات الناقصة" : "Missing skills"}:</strong> ${(aiAnalysis.missing_skills || []).length ? aiAnalysis.missing_skills.join(" , ") : "-"}</p>
+            <p><strong>${this.state.settings.language === "ar" ? "اقتراحات التحسين" : "Suggestions"}:</strong> ${(aiAnalysis.suggestions || []).length ? aiAnalysis.suggestions.join(" | ") : "-"}</p>
+          ` : ""}
           <p><strong>Email:</strong> ${parsed.email || "-"}</p>
           <p><strong>${this.state.settings.language === "ar" ? "الجوال" : "Phone"}:</strong> ${parsed.phone || "-"}</p>
           <p><strong>LinkedIn:</strong> ${parsed.linkedin || "-"}</p>
           <p><strong>${this.state.settings.language === "ar" ? "المهارات" : "Skills"}:</strong> ${parsed.skills.length ? parsed.skills.join(" , ") : "-"}</p>
-          <div id="cvPreview" class="code-block">${previewText || "-"}</div>
+          <div id="cvPreview" class="code-block">${previewText || (this.state.settings.language === "ar" ? "لا يوجد نص معاينة متاح." : "No preview text available.")}</div>
         </div>
       `;
     }
@@ -492,13 +454,32 @@
         doc(db, "users", currentAuthUser.uid),
         {
           cv: {
-            rawText: cvPayload.rawText,
-            parsed: cvPayload.parsed,
+            rawText: cvPayload.rawText || "",
+            parsed: cvPayload.parsed || { email: "", phone: "", linkedin: "", skills: [] },
+            aiAnalysis: cvPayload.aiAnalysis || null,
             updatedAt: serverTimestamp()
           }
         },
         { merge: true }
       );
+    }
+
+    async requestCvAnalysis(file) {
+      const formData = new FormData();
+      if (file) {
+        formData.append("file", file);
+      }
+      const response = await fetch("/.netlify/functions/analyze-cv", {
+        method: "POST",
+        body: formData
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(payload.error || "analysis-failed");
+        error.status = response.status;
+        throw error;
+      }
+      return payload;
     }
 
     bindFirebaseSession() {
@@ -728,32 +709,40 @@
         this.state.cvStatusMessage = "جاري قراءة السيرة وتحليلها...";
         this.render();
 
-        this.extractTextFromPdf(file)
-          .then(async (rawText) => {
-            if (rawText.length < 50) {
-              this.state.cvStatusMessage = "ما قدرت أطلع نص واضح من الـ PDF. ممكن يكون سكان/صورة.";
-              this.state.cvUploadPending = false;
-              this.render();
-              return;
-            }
-
-            const parsed = this.parseCvText(rawText);
-            const cvPayload = { rawText, parsed };
+        this.requestCvAnalysis(file)
+          .then(async (analysisResult) => {
+            const skills = Array.isArray(analysisResult.skills) ? analysisResult.skills : [];
+            const cvPayload = {
+              rawText: analysisResult.raw_text_preview || "",
+              parsed: {
+                email: "",
+                phone: "",
+                linkedin: "",
+                skills
+              },
+              aiAnalysis: {
+                summary: analysisResult.summary || "",
+                suggested_role: analysisResult.suggested_role || "",
+                skills,
+                missing_skills: Array.isArray(analysisResult.missing_skills) ? analysisResult.missing_skills : [],
+                suggestions: Array.isArray(analysisResult.suggestions) ? analysisResult.suggestions : []
+              }
+            };
             await this.saveCvToFirestore(cvPayload);
 
             const currentUser = this.currentUser();
             if (currentUser) {
               currentUser.cv = cvPayload;
               if (currentUser.role === "student") {
-                currentUser.topSkills = parsed.skills.length ? parsed.skills : currentUser.topSkills;
+                currentUser.topSkills = skills.length ? skills : currentUser.topSkills;
                 const progressSafe = this.currentProgress();
                 if (progressSafe) {
                   progressSafe.cvUploaded = true;
                   progressSafe.cvAnalysis = {
-                    skills: parsed.skills.length ? parsed.skills : [],
+                    skills,
                     seniority: "Entry",
                     recommendedRoles: [this.altRole(currentUser)],
-                    baseScore: clamp(parsed.skills.length * 6, 18, 60)
+                    baseScore: clamp(skills.length * 6, 18, 60)
                   };
                   if (!progressSafe.badges.includes("CV Verified")) {
                     progressSafe.badges.push("CV Verified");
@@ -770,8 +759,7 @@
             this.render();
           })
           .catch((error) => {
-            console.error(error.code, error.message);
-            this.state.cvStatusMessage = this.state.settings.language === "ar" ? "تعذر تحليل ملف الـ PDF محلياً" : "Unable to analyze the PDF locally";
+            this.state.cvStatusMessage = error.message || (this.state.settings.language === "ar" ? "تعذر تحليل السيرة حالياً" : "Unable to analyze the CV right now");
             this.state.cvUploadPending = false;
             this.render();
           });
