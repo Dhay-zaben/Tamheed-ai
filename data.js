@@ -23,7 +23,8 @@ window.TAMHEED_DATA = {
       uploadCv: "رفع السيرة الذاتية",
       jobs: "الوظائف",
       labs: "المختبرات",
-      plan: "الخطة",
+      interview: "المقابلة الذكية",
+      plan: "خطة التطوير",
       profile: "الملف الذكي",
       dashboard: "لوحة التحكم",
       roles: "الأدوار",
@@ -62,7 +63,8 @@ window.TAMHEED_DATA = {
       uploadCv: "Upload CV",
       jobs: "Jobs",
       labs: "Labs",
-      plan: "Plan",
+      interview: "Smart Interview",
+      plan: "Development Plan",
       profile: "Profile",
       dashboard: "Dashboard",
       roles: "Roles",
@@ -223,6 +225,107 @@ window.TAMHEED_DATA = {
       }
     ]
   },
+  behaviorScenarios: [
+    {
+      id: "scenario-1",
+      titleAr: "عميل غاضب بسبب توقف الخدمة",
+      titleEn: "Angry customer after service outage",
+      descriptionAr: "عميل مهم يشتكي بانفعال بعد توقف الخادم لمدة 20 دقيقة. ما ردك الأول؟",
+      descriptionEn: "A key customer is upset after a 20-minute server outage. What is your first response?",
+      options: [
+        {
+          id: "b1",
+          textAr: "أعتذر بوضوح، أشرح ما نعرفه، وأحدد وقت تحديث قريب",
+          textEn: "Apologize clearly, explain what is known, and commit to a near-term update",
+          communication: 5,
+          empathy: 5,
+          problem: 5
+        },
+        {
+          id: "b2",
+          textAr: "أطلب منهم الانتظار حتى ينتهي الفريق التقني",
+          textEn: "Ask them to wait until engineering is done",
+          communication: 2,
+          empathy: 1,
+          problem: 2
+        },
+        {
+          id: "b3",
+          textAr: "أوضح أن العطل خارج سيطرتنا",
+          textEn: "Explain the outage is outside our control",
+          communication: 1,
+          empathy: 0,
+          problem: 1
+        }
+      ]
+    },
+    {
+      id: "scenario-2",
+      titleAr: "تأخر مشروع داخلي مهم",
+      titleEn: "Critical internal project delay",
+      descriptionAr: "مديرك يسألك أمام الفريق عن سبب التأخر في التسليم. ما ردك الأول؟",
+      descriptionEn: "Your manager asks in front of the team why delivery is late. What is your first response?",
+      options: [
+        {
+          id: "c1",
+          textAr: "أوضح السبب باختصار، أتحمل المسؤولية، وأقترح خطة تعويض واضحة",
+          textEn: "Explain the cause briefly, take ownership, and propose a clear recovery plan",
+          communication: 5,
+          empathy: 4,
+          problem: 5
+        },
+        {
+          id: "c2",
+          textAr: "أذكر أن الفريق لم يسلمني المطلوب في الوقت المناسب",
+          textEn: "Mention that the team did not deliver what I needed on time",
+          communication: 2,
+          empathy: 1,
+          problem: 1
+        },
+        {
+          id: "c3",
+          textAr: "أقول إن الضغط كان كبيرًا ولا يمكن توقع كل شيء",
+          textEn: "Say the workload was heavy and not everything can be predicted",
+          communication: 2,
+          empathy: 1,
+          problem: 2
+        }
+      ]
+    },
+    {
+      id: "scenario-3",
+      titleAr: "ملاحظة حادة من عميل على عرضك",
+      titleEn: "Sharp client criticism during your presentation",
+      descriptionAr: "أثناء العرض، قاطعك العميل وقال إن الأرقام غير مقنعة. كيف تبدأ الرد؟",
+      descriptionEn: "During a presentation, the client interrupts and says the numbers are not convincing. How do you begin your response?",
+      options: [
+        {
+          id: "d1",
+          textAr: "أشكره على الملاحظة، أوضح الفرضية، وأعرض نقطة تحقق إضافية مباشرة",
+          textEn: "Thank them for the feedback, clarify the assumption, and present an extra validation point immediately",
+          communication: 5,
+          empathy: 4,
+          problem: 5
+        },
+        {
+          id: "d2",
+          textAr: "أؤكد أن الأرقام صحيحة وأن المشكلة في فهمهم لها",
+          textEn: "Insist the numbers are correct and the issue is their interpretation",
+          communication: 1,
+          empathy: 0,
+          problem: 1
+        },
+        {
+          id: "d3",
+          textAr: "أتجاوز التعليق وأكمل العرض كما هو",
+          textEn: "Ignore the comment and continue the presentation as is",
+          communication: 1,
+          empathy: 1,
+          problem: 1
+        }
+      ]
+    }
+  ],
   interviewQuestions: [
     {
       qAr: "عرف بنفسك خلال 60 ثانية.",
