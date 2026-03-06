@@ -185,6 +185,8 @@ body[data-theme="dark"] .smart-profile-target-role select {
   background: rgba(255, 255, 255, 0.1);
   color: #FFFFFF;
   border-color: rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 textarea {
@@ -534,11 +536,11 @@ body[data-theme="dark"] .services-dropdown {
 
 body[data-theme="dark"] .services-dropdown-item {
   color: #e8fffb;
-  background: rgba(63, 213, 160, 0.08);
+  background: rgba(63, 213, 160, 0.16);
 }
 
 body[data-theme="dark"] .services-dropdown-item:hover {
-  background: rgba(63, 213, 160, 0.16);
+  background: rgba(63, 213, 160, 0.24);
   color: #ffffff;
 }
 
@@ -560,10 +562,10 @@ body[data-theme="dark"] .contact-dropdown {
   align-items: center;
   justify-content: flex-start;
   padding: 0.55rem 0.8rem;
-  border-radius: 14px;
+  border-radius: 5px;
   color: var(--text);
   font-size: 0.84rem;
-  background: rgba(16, 65, 106, 0.02);
+  background: rgba(16, 65, 106, 0.06);
 }
 
 .services-dropdown-item:hover {
