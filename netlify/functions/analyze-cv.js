@@ -77,10 +77,12 @@ async function extractTextFromRequest(event) {
       fieldName: file ? file.fieldName : null,
       mimeType: file ? file.mimeType : null
     });
+    const targetRole = (fields && (fields.target_role || fields.targetRole)) || "";
     if (fields && fields.text && fields.text.trim()) {
       return {
         text: fields.text.trim(),
-        fileSize
+        fileSize,
+        targetRole
       };
     }
     if (!file || !file.buffer || !file.buffer.length) {
@@ -90,11 +92,12 @@ async function extractTextFromRequest(event) {
       throw Object.assign(new Error("invalid-file-type"), { statusCode: 400 });
     }
     try {
-      console.log("[analyze-cv] stage=parsing type=pdf", { fileSize });
+      console.log("[analyze-cv] stage=parsing type=pdf", { fileSize, targetRole });
       const parsed = await pdfParse(file.buffer);
       return {
         text: (parsed.text || "").trim(),
-        fileSize
+        fileSize,
+        targetRole
       };
     } catch (error) {
       console.error("[analyze-cv] stage=parsing failed", {
@@ -107,6 +110,7 @@ async function extractTextFromRequest(event) {
   if (contentType.includes("application/json")) {
     console.log("[analyze-cv] stage=upload type=json");
     const payload = JSON.parse(event.body || "{}");
+    const targetRole = (payload && (payload.target_role || payload.targetRole)) || "";
     if (payload && typeof payload.text === "string" && payload.text.trim()) {
       if (payload.fileBase64) {
         try {
@@ -118,7 +122,8 @@ async function extractTextFromRequest(event) {
           const parsed = await pdfParse(pdfBuffer);
           return {
             text: (parsed.text || "").trim(),
-            fileSize: pdfBuffer.length
+            fileSize: pdfBuffer.length,
+            targetRole
           };
         } catch (error) {
           console.error("[analyze-cv] stage=parsing failed", {
@@ -129,7 +134,8 @@ async function extractTextFromRequest(event) {
       }
       return {
         text: payload.text.trim(),
-        fileSize: 0
+        fileSize: 0,
+        targetRole
       };
     }
     if (payload && payload.fileBase64) {
@@ -142,7 +148,8 @@ async function extractTextFromRequest(event) {
         const parsed = await pdfParse(pdfBuffer);
         return {
           text: (parsed.text || "").trim(),
-          fileSize: pdfBuffer.length
+        fileSize: pdfBuffer.length,
+        targetRole
         };
       } catch (error) {
         console.error("[analyze-cv] stage=parsing failed", {
@@ -160,7 +167,8 @@ async function extractTextFromRequest(event) {
     if (text) {
       return {
         text,
-        fileSize: 0
+        fileSize: 0,
+        targetRole: ""
       };
     }
   }
@@ -192,11 +200,13 @@ exports.handler = async function handler(event) {
 
   let cvText = "";
   let fileSize = 0;
+  let targetRole = "";
 
   try {
     const extracted = await extractTextFromRequest(event);
     cvText = extracted.text;
     fileSize = extracted.fileSize || 0;
+    targetRole = extracted.targetRole || "";
   } catch (error) {
     console.error("[analyze-cv] stage=upload failed", {
       message: error && error.message ? error.message : "Unknown upload error"
@@ -240,11 +250,11 @@ exports.handler = async function handler(event) {
           messages: [
             {
               role: "system",
-              content: "You analyze CVs for a Saudi job-readiness platform. Return valid JSON only with keys: summary, suggested_role, skills, missing_skills, suggestions."
+              content: "You are an expert CV analyst specializing in job market readiness assessment. Your task is to provide HIGHLY ACCURATE analysis of candidates' capability to perform specific roles. You MUST consider: (1) exact skill-to-job matching, (2) experience level alignment, (3) gap identification, and (4) realistic capability scoring. Always condition analysis strictly on the TARGET ROLE. Return ONLY valid JSON with keys: summary (string), target_role (string), job_fit_score (number 0-100), capability_assessment (string explaining if they CAN do the job), suggested_role (string), strengths (array of top 3 role-specific strengths), weaknesses (array of top 3 role-specific gaps), skills (array of all detected skills), missing_skills (array of required skills NOT in CV), suggestions (array of 4 actionable improvement steps). Do not include any additional keys, markdown, or commentary."
             },
             {
               role: "user",
-              content: `Analyze this CV text. Summarize the candidate, extract key skills, identify the most suitable job role, identify missing skills for a mid-level version of that role, and provide practical improvement suggestions.\n\nCV:\n${cvText}`
+              content: `CRITICAL: You must assess whether this candidate can realistically perform the target role based on their CV.\n\nTarget job role: ${targetRole || "Not specified - infer from CV context"}.\n\nAnalysis tasks:\n1) Provide an accurate 3-4 sentence summary of the candidate's profile.\n2) Assess job capability: Can they perform this target role? (yes/no with reasoning)\n3) Score their fit for the target role (0-100, where 70+ = capable, 50-69 = needs development, <50 = significant gaps).\n4) List top 3 strengths SPECIFIC to the target role requirements.\n5) List top 3 weaknesses or critical gaps for this role.\n6) Extract ALL technical and soft skills detected in the CV.\n7) List skills MISSING that are typically required for this role (be specific to role).\n8) Provide 4 practical, actionable suggestions to improve fit for the target role.\n\nIMPORTANT: Be realistic and accurate. If they lack core requirements for the role, say so. If they are well-suited, acknowledge it.\n\nCV TEXT:\n${cvText}`
             }
           ]
         });
@@ -275,7 +285,12 @@ exports.handler = async function handler(event) {
 
     return json(200, {
       summary: parsed.summary,
+      target_role: parsed.target_role || targetRole || null,
       suggested_role: parsed.suggested_role,
+      job_fit_score: typeof parsed.job_fit_score === "number" ? parsed.job_fit_score : null,
+      capability_assessment: parsed.capability_assessment || null,
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+      weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses : [],
       skills: Array.isArray(parsed.skills) ? parsed.skills : [],
       missing_skills: Array.isArray(parsed.missing_skills) ? parsed.missing_skills : [],
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],

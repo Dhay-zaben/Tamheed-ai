@@ -90,7 +90,8 @@
     session: "tamheed_session",
     settings: "tamheed_settings",
     progress: "tamheed_progress",
-    companyRoles: "tamheed_company_roles"
+    companyRoles: "tamheed_company_roles",
+    invitedCandidates: "tamheed_invited_candidates"
   };
 
   const DATA = window.TAMHEED_DATA || FALLBACK_DATA;
@@ -104,6 +105,8 @@
       email: "sara@student.com",
       password: "123456",
       city: "Riyadh",
+      desiredRole: "Data Analyst", // Used for behavioral questions
+      desiredRoleAr: "محللة بيانات",
       targetRoleAr: "محللة بيانات",
       targetRoleEn: "Data Analyst",
       experience: 2,
@@ -332,9 +335,10 @@
       this.state = {
         accounts: this.loadAccounts(),
         session: null,
-        settings: Object.assign({ language: "ar", theme: "light" }, readStore(STORAGE_KEYS.settings, {})),
+        settings: Object.assign({ language: "ar", theme: "dark" }, readStore(STORAGE_KEYS.settings, {})),
         progress: readStore(STORAGE_KEYS.progress, {}),
         companyRoles: readStore(STORAGE_KEYS.companyRoles, []),
+        invitedCandidates: readStore(STORAGE_KEYS.invitedCandidates, {}),
         route: this.parseRoute(),
         authResolved: false,
         cvUploadPending: false,
@@ -349,8 +353,19 @@
         labDraftAnswer: "",
         behaviorDraftAnswer: "",
         behaviorScenarioIndex: 0,
+        behavioralQuestions: null, // AI-generated behavioral questions
+        behavioralAnswers: {}, // Store answers for each question
+        behavioralCurrentQuestion: 0,
+        behavioralTimer: 120,
+        behavioralTestActive: false,
+        behavioralLoading: false,
+        behavioralResultReady: false,
+        behavioralLatestScores: null,
         cvStatusMessage: "",
+        jobCvStatusMessage: "",
         selectedTargetRole: "Frontend Developer",
+        realJobs: null, // Will store real jobs from API
+        jobsLoading: false,
         railOpen: false,
         authRole: "student",
         authDrafts: {
@@ -375,14 +390,108 @@
         }
       };
       this.labInterval = null;
+      this.behavioralInterval = null;
       this.toastTimer = null;
       this.bindGlobalEvents();
+      // Force default theme to dark on initial load if none stored
+      if (!this.state.settings.theme) {
+        this.state.settings.theme = "dark";
+      }
       this.applySettings();
       this.configurePdfJs();
       this.ensureSeedData();
       this.ensureDemoAccounts();
       this.render();
       this.bindFirebaseSession();
+    }
+
+    scoreInterviewAnswers(drafts) {
+      const answers = Object.values(drafts || {});
+      const totalQuestions = DATA.interviewQuestions.length;
+      const KEYWORDS = ["team", "project", "deliver", "result", "impact", "customer", "client", "stakeholder", "improve", "reduce", "increase", "design", "build", "ship", "launch", "data", "metrics", "analyze", "fix", "solve", "challenge", "risk", "timeline", "priority"];
+      const STRUCTURE = ["first", "then", "after", "because", "so", "therefore", "finally", "as a result"];
+
+      let sum = 0;
+      let answered = 0;
+      const feedback = [];
+
+      answers.forEach((raw, idx) => {
+        const text = (raw || "").trim();
+        if (!text) {
+          feedback.push(this.state.settings.language === "ar"
+            ? `السؤال ${idx + 1}: لم تتم الإجابة عليه.`
+            : `Question ${idx + 1}: No answer provided.`);
+          return;
+        }
+        answered += 1;
+        const words = text.split(/\s+/).filter(Boolean);
+        const wordCount = words.length;
+        const uniqueRatio = words.length ? new Set(words.map((w) => w.toLowerCase())).size / words.length : 0;
+        const keywordHits = KEYWORDS.reduce((acc, kw) => acc + (text.toLowerCase().includes(kw) ? 1 : 0), 0);
+        const structureHits = STRUCTURE.reduce((acc, kw) => acc + (text.toLowerCase().includes(kw) ? 1 : 0), 0);
+        const hasResult = /(result|impact|improv|increase|reduce|saved|growth|achiev|deliver)/i.test(text);
+
+        const lengthScore = clamp((wordCount - 18) / 45 * 35, 0, 35);
+        const keywordScore = clamp(keywordHits * 6, 0, 30);
+        const structureScore = clamp(structureHits * 4, 0, 20);
+        const resultBonus = hasResult ? 10 : 0;
+
+        let penalty = 0;
+        if (wordCount < 20) penalty += 12;
+        if (wordCount < 12) penalty += 10;
+        if (uniqueRatio < 0.45) penalty += 8;
+        if (keywordHits === 0 && structureHits === 0 && wordCount >= 5) {
+          penalty += 25; // likely gibberish / irrelevant
+        }
+
+        const questionScore = clamp(Math.round(lengthScore + keywordScore + structureScore + resultBonus - penalty), 0, 95);
+        sum += questionScore;
+
+        if (wordCount < 30) {
+          feedback.push(this.state.settings.language === "ar"
+            ? `السؤال ${idx + 1}: زد التفاصيل والنتائج (الإجابة قصيرة).`
+            : `Q${idx + 1}: Add more detail and outcomes (answer is short).`);
+        }
+        if (!hasResult) {
+          feedback.push(this.state.settings.language === "ar"
+            ? `السؤال ${idx + 1}: اذكر نتيجة أو أثر رقمي.`
+            : `Q${idx + 1}: Mention a result or measurable impact.`);
+        }
+        if (keywordHits < 2) {
+          feedback.push(this.state.settings.language === "ar"
+            ? `السؤال ${idx + 1}: أضف كلمات عن المشروع/الأثر/الفريق.`
+            : `Q${idx + 1}: Add project/impact/team specifics.`);
+        }
+        if (keywordHits === 0 && structureHits === 0) {
+          feedback.push(this.state.settings.language === "ar"
+            ? `السؤال ${idx + 1}: الإجابة غير واضحة للدور—أضف مثالاً حقيقياً وخطوات.`
+            : `Q${idx + 1}: Answer lacks role context—add a concrete example and steps.`);
+        }
+      });
+
+      const answeredRatio = totalQuestions ? answered / totalQuestions : 0;
+      const missingPenalty = (totalQuestions - answered) * 8;
+      let overall = clamp(Math.round((sum / Math.max(answered, 1)) * answeredRatio) - missingPenalty, 5, 95);
+      if (overall < 5) overall = 5;
+      if (overall < 20) {
+        feedback.push(this.state.settings.language === "ar"
+          ? "النتيجة منخفضة: أعد الإجابات بذكر المشكلة، الإجراء، والنتيجة الرقمية."
+          : "Low score: rewrite with problem, action, and measurable result.");
+      }
+
+      if (answered < totalQuestions) {
+        feedback.unshift(this.state.settings.language === "ar"
+          ? "أكمل كل الأسئلة لتحصل على درجة أدق."
+          : "Answer all questions to get an accurate score.");
+      }
+
+      if (!feedback.length) {
+        feedback.push(this.state.settings.language === "ar"
+          ? "أضف مثالاً محدداً، ما قمت به، والنتيجة بالأرقام."
+          : "Add a specific example: what you did and the measurable result.");
+      }
+
+      return { overall, feedback: feedback.slice(0, 8) };
     }
 
     loadAccounts() {
@@ -536,6 +645,33 @@
       writeStore(STORAGE_KEYS.companyRoles, this.state.companyRoles);
     }
 
+    persistInvitedCandidates() {
+      writeStore(STORAGE_KEYS.invitedCandidates, this.state.invitedCandidates);
+    }
+
+    getProfileTargetRole(user) {
+      return (user && (user.targetRoleEn || user.desiredRole)) || this.state.selectedTargetRole || "Frontend Developer";
+    }
+
+    isSaraDemoUser(user) {
+      if (!user) return false;
+      const demoEmail = String(DEMO_ACCOUNTS.student.email || "").toLowerCase();
+      return user.id === DEMO_ACCOUNTS.student.id || String(user.email || "").toLowerCase() === demoEmail;
+    }
+
+    isCandidateInvited(candidateId) {
+      return Boolean(this.state.invitedCandidates && this.state.invitedCandidates[candidateId]);
+    }
+
+    markCandidateInvited(candidateId) {
+      if (!candidateId) return;
+      if (!this.state.invitedCandidates) {
+        this.state.invitedCandidates = {};
+      }
+      this.state.invitedCandidates[candidateId] = true;
+      this.persistInvitedCandidates();
+    }
+
     getAuthDraft(mode) {
       return this.state.authDrafts[mode][this.state.authRole];
     }
@@ -553,6 +689,116 @@
       }, 2400);
     }
 
+    showToast(message) {
+      this.setToast(message);
+    }
+
+    downloadSmartProfilePng() {
+      const user = this.currentUser();
+      const progress = this.currentProgress();
+      if (!user || !progress) return false;
+
+      const readiness = this.getReadiness(user.id);
+      const skills = (user.topSkills || []).slice(0, 6);
+      const badges = (progress.badges || []).slice(0, 6);
+      const isAr = this.state.settings.language === "ar";
+      const width = 1400;
+      const height = 900;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return false;
+
+      // Background
+      const bg = ctx.createLinearGradient(0, 0, width, height);
+      bg.addColorStop(0, "#0d3c61");
+      bg.addColorStop(1, "#0f5f70");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+
+      // Card surface
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.fillRect(55, 55, width - 110, height - 110);
+
+      // Header
+      ctx.fillStyle = "#10416A";
+      ctx.font = "700 48px 'Plus Jakarta Sans', Arial";
+      ctx.fillText(isAr ? "الملف الذكي" : "Smart Profile", 100, 140);
+      ctx.font = "600 34px 'Plus Jakarta Sans', Arial";
+      ctx.fillText(this.displayName(user), 100, 195);
+      ctx.font = "500 24px 'Plus Jakarta Sans', Arial";
+      ctx.fillStyle = "#475569";
+      ctx.fillText(this.candidateRole(user), 100, 235);
+
+      // Readiness ring
+      const cx = width - 220;
+      const cy = 185;
+      const radius = 72;
+      ctx.lineWidth = 16;
+      ctx.strokeStyle = "rgba(16,65,106,0.15)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "#13B4B7";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * readiness) / 100);
+      ctx.stroke();
+      ctx.fillStyle = "#10416A";
+      ctx.font = "700 38px 'Plus Jakarta Sans', Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(String(readiness), cx, cy + 14);
+      ctx.textAlign = "start";
+
+      ctx.font = "600 20px 'Plus Jakarta Sans', Arial";
+      ctx.fillStyle = "#475569";
+      const readinessLabel = isAr ? "الجاهزية الحالية" : "Current readiness";
+      ctx.fillText(readinessLabel, width - 335, 285);
+
+      // Skills block
+      ctx.fillStyle = "#10416A";
+      ctx.font = "700 28px 'Plus Jakarta Sans', Arial";
+      ctx.fillText(isAr ? "المهارات" : "Skills", 100, 330);
+      let y = 370;
+      ctx.font = "600 22px 'Plus Jakarta Sans', Arial";
+      skills.forEach((skill) => {
+        ctx.fillStyle = "rgba(16,65,106,0.08)";
+        ctx.fillRect(100, y - 26, 360, 40);
+        ctx.fillStyle = "#10416A";
+        ctx.fillText(skill, 116, y);
+        y += 56;
+      });
+
+      // Badges block
+      ctx.fillStyle = "#10416A";
+      ctx.font = "700 28px 'Plus Jakarta Sans', Arial";
+      ctx.fillText(isAr ? "الإشارات الموثقة" : "Verified Badges", 520, 330);
+      y = 370;
+      ctx.font = "600 22px 'Plus Jakarta Sans', Arial";
+      badges.forEach((badge) => {
+        ctx.fillStyle = "rgba(19,180,183,0.14)";
+        ctx.fillRect(520, y - 26, 760, 40);
+        ctx.fillStyle = "#10416A";
+        ctx.fillText(badge, 536, y);
+        y += 56;
+      });
+
+      // Footer line
+      ctx.fillStyle = "#64748B";
+      ctx.font = "500 18px 'Plus Jakarta Sans', Arial";
+      const dateLabel = new Date().toLocaleDateString(isAr ? "ar-SA" : "en-US");
+      ctx.fillText(`${isAr ? "تاريخ التصدير" : "Exported"}: ${dateLabel}`, 100, height - 90);
+
+      const link = document.createElement("a");
+      const safeName = String((user.nameEn || user.name || "profile")).replace(/\s+/g, "-").toLowerCase();
+      link.href = canvas.toDataURL("image/png");
+      link.download = `tamheed-smart-profile-${safeName}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      return true;
+    }
+
     errorText(key) {
       return this.state.formErrors[key] ? `<small class="field-error">${this.state.formErrors[key]}</small>` : "";
     }
@@ -563,7 +809,7 @@
 
     configurePdfJs() {
       if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js";
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
       }
     }
 
@@ -862,7 +1108,11 @@
     }
 
     buildDevelopmentPlan(targetRole, matches) {
-      const match = matches.find((item) => item.role === targetRole) || matches[0] || { role: targetRole, missingSkills: [] };
+      const normalizedTarget = String(targetRole || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const match = matches.find((item) => {
+        const normalizedRole = String(item.role || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return normalizedRole === normalizedTarget || normalizedRole.includes(normalizedTarget) || normalizedTarget.includes(normalizedRole);
+      }) || matches[0] || { role: targetRole, missingSkills: [] };
       const gaps = match.missingSkills.slice(0, 4);
       const defaults = ["أساسيات المجال", "ممارسة عملية", "تحسين جودة التنفيذ", "تجهيز ملف أعمال"];
       const weeks = [1, 2, 3, 4].map((week, index) => {
@@ -889,11 +1139,12 @@
     }
 
     buildCvAnalysis(text, targetRole) {
+      const effectiveTargetRole = targetRole || this.getProfileTargetRole(this.currentUser());
       const parsedProfile = this.parseCvText(text);
       const skills = this.detectSkills(text);
       const scores = this.scoreCvAnalysis(parsedProfile, skills);
       const matches = this.computeRoleMatches(skills);
-      const plan = this.buildDevelopmentPlan(targetRole, matches);
+      const plan = this.buildDevelopmentPlan(effectiveTargetRole, matches);
       return {
         rawTextPreview: text.slice(0, 1500),
         parsedProfile,
@@ -902,6 +1153,29 @@
         matches,
         plan
       };
+    }
+
+    async fetchCvAiInsights(text, targetRole) {
+      try {
+        const response = await fetch("/.netlify/functions/analyze-cv", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            text: text.slice(0, 16000),
+            target_role: targetRole || this.state.selectedTargetRole || ""
+          })
+        });
+        if (!response.ok) {
+          throw new Error("ai-analysis-failed");
+        }
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("[upload-cv] AI CV analysis failed", error);
+        return null;
+      }
     }
 
     buildCvSummaryMarkup(cvAnalysis) {
@@ -928,23 +1202,39 @@
         `;
       }
       const grouped = Object.keys(SKILL_LIBRARY).map((category) => {
-        const items = (cvAnalysis.skills || []).filter((skill) => skill.category === category);
+        const items = (cvAnalysis.skills || [])
+          .filter((skill) => skill.category === category)
+          .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+          .slice(0, 5);
         if (!items.length) {
           return "";
         }
         return `
-          <div class="stack">
-            <p><strong>${category}</strong></p>
-            <div class="chip-row">
-              ${items.map((skill) => `<span class="chip">${skill.name} · ${skill.level} · ${Math.round(skill.confidence * 100)}%</span>`).join("")}
+          <article class="cv-section-card cv-skill-card">
+            <p class="cv-section-title"><strong>${category}</strong></p>
+            <div class="cv-skill-list">
+              ${items.map((skill) => {
+                const pct = Math.round((skill.confidence || 0) * 100);
+                return `
+                  <div class="cv-skill-item">
+                    <span class="cv-skill-name">${skill.name} · ${skill.level}</span>
+                    <span class="cv-skill-score-wrap">
+                      <span class="cv-skill-score">${pct}%</span>
+                      <span class="cv-skill-trend ${pct >= 70 ? "up" : "down"}">${pct >= 70 ? "▲" : "▼"}</span>
+                    </span>
+                  </div>
+                `;
+              }).join("")}
             </div>
-          </div>
+          </article>
         `;
       }).join("");
-      const topMatches = (cvAnalysis.matches || []).slice(0, 3);
-      const targetMatch = (cvAnalysis.matches || []).find((item) => item.role === plan.targetRole) || topMatches[0] || { missingSkills: [] };
+      const sortedRoleMatches = [...(cvAnalysis.matches || [])]
+        .filter((item) => item && item.role && Number.isFinite(item.match))
+        .sort((a, b) => b.match - a.match);
+      const topMatches = sortedRoleMatches.slice(0, 6);
+      const targetMatch = sortedRoleMatches.find((item) => item.role === plan.targetRole) || topMatches[0] || { missingSkills: [] };
       const infoRows = [
-        parsedProfile.email ? `<p><strong>Email:</strong> ${parsedProfile.email}</p>` : "",
         parsedProfile.phone ? `<p><strong>${this.state.settings.language === "ar" ? "الجوال" : "Phone"}:</strong> ${parsedProfile.phone}</p>` : "",
         parsedProfile.linkedin ? `<p><strong>LinkedIn:</strong> ${parsedProfile.linkedin}</p>` : "",
         parsedProfile.education ? `<p><strong>${this.state.settings.language === "ar" ? "التعليم" : "Education"}:</strong> ${parsedProfile.education}</p>` : "",
@@ -952,28 +1242,94 @@
         parsedProfile.projects ? `<p><strong>${this.state.settings.language === "ar" ? "المشاريع" : "Projects"}:</strong> ${parsedProfile.projects}</p>` : ""
       ].filter(Boolean).join("");
       const hasScores = scores.TechnicalScore || scores.ProfileCompleteness || scores.ProjectsScore || scores.TotalScore;
+      const ai = cvAnalysis.aiInsights || null;
+      const aiTargetRole = ai && (ai.target_role || ai.suggested_role || plan.targetRole || this.state.selectedTargetRole);
+      // Keep one unified readiness number across the UI to avoid conflicting values.
+      const readinessScore = ai && Number.isFinite(ai.job_fit_score)
+        ? ai.job_fit_score
+        : (scores.TotalScore || 0);
+      const aiStrengths = ai && Array.isArray(ai.strengths) ? ai.strengths.slice(0, 3) : [];
+      const aiWeaknesses = ai && Array.isArray(ai.weaknesses) ? ai.weaknesses.slice(0, 3) : [];
+      const aiMissing = ai && Array.isArray(ai.missing_skills) ? ai.missing_skills.slice(0, 4) : [];
+      const aiSuggestions = ai && Array.isArray(ai.suggestions) ? ai.suggestions.slice(0, 4) : [];
+      const overallScore = Number.isFinite(scores.TotalScore) ? scores.TotalScore : 0;
+      const readinessTone = readinessScore >= 70 ? "good" : (readinessScore >= 50 ? "warn" : "risk");
+      const overallTone = overallScore >= 70 ? "good" : (overallScore >= 50 ? "warn" : "risk");
       return `
-        <div class="stack">
-          ${infoRows}
-          ${grouped}
-          ${hasScores ? `<div class="stack">
-            <p><strong>${this.state.settings.language === "ar" ? "تفصيل الدرجات" : "Score breakdown"}</strong></p>
-            <p>Technical: ${scores.TechnicalScore} | Profile: ${scores.ProfileCompleteness} | Projects: ${scores.ProjectsScore} | Total: ${scores.TotalScore}</p>
-          </div>` : ""}
-          ${topMatches.length ? `<div class="stack">
-            <p><strong>${this.state.settings.language === "ar" ? "أفضل الأدوار المطابقة" : "Top role matches"}</strong></p>
-            ${topMatches.map((match) => `<p>${match.role}: ${match.match}%</p>`).join("")}
-          </div>` : ""}
-          ${targetMatch.missingSkills.length ? `<div class="stack">
-            <p><strong>${this.state.settings.language === "ar" ? "فجوات المهارات للدور المختار" : "Missing skills for selected role"}</strong></p>
-            <p>${targetMatch.missingSkills.join(" , ")}</p>
-          </div>` : ""}
-          ${plan.weeks.length || plan.projectIdea ? `<div class="stack">
-            <p><strong>${this.state.settings.language === "ar" ? "خطة 4 أسابيع" : "4-week plan"}</strong></p>
-            ${plan.weeks.map((week) => `<p>${this.state.settings.language === "ar" ? `الأسبوع ${week.week}` : `Week ${week.week}`}: ${week.focus} - ${week.task} - ${week.resource}</p>`).join("")}
-            ${plan.projectIdea ? `<p><strong>${this.state.settings.language === "ar" ? "فكرة مشروع" : "Portfolio idea"}:</strong> ${plan.projectIdea}</p>` : ""}
-          </div>` : ""}
-          ${cvAnalysis.rawTextPreview ? `<div id="cvPreview" class="code-block">${cvAnalysis.rawTextPreview}</div>` : ""}
+        <div class="cv-compact">
+          <div class="cv-score-cards">
+            <article class="cv-score-card ${readinessTone}">
+              <small>${this.state.settings.language === "ar" ? "جاهزية الدور" : "Role readiness"}</small>
+              <strong>${readinessScore}% ${plan.targetRole ? `<span>(${plan.targetRole})</span>` : ""}</strong>
+              <div class="cv-score-bar"><span style="width:${readinessScore}%"></span></div>
+            </article>
+            ${hasScores ? `
+              <article class="cv-score-card ${overallTone}">
+                <small>${this.state.settings.language === "ar" ? "الدرجة الإجمالية" : "Overall score"}</small>
+                <strong>${overallScore}<span>/100</span></strong>
+                <div class="cv-score-bar"><span style="width:${overallScore}%"></span></div>
+              </article>
+            ` : ""}
+          </div>
+          ${infoRows ? `<article class="cv-section-card cv-info-card">${infoRows}</article>` : ""}
+          ${grouped ? `<div class="cv-skills-grid">${grouped}</div>` : ""}
+          ${topMatches.length ? `<article class="cv-section-card cv-top-role">
+            <p class="cv-section-title"><strong>${this.state.settings.language === "ar" ? "أفضل الوظائف المطابقة" : "Top matching roles"}</strong></p>
+            <div class="cv-role-list">
+              ${topMatches.map((match) => `
+                <div class="cv-role-item">
+                  <span class="cv-role-name">${match.role}</span>
+                  <span class="cv-role-score-wrap">
+                    <span class="cv-role-score">${match.match}%</span>
+                    <span class="cv-role-trend ${match.match >= 70 ? "up" : "down"}">${match.match >= 70 ? "▲" : "▼"}</span>
+                  </span>
+                </div>
+              `).join("")}
+            </div>
+          </article>` : ""}
+          ${targetMatch.missingSkills.length ? `<article class="cv-section-card cv-missing">
+            <p class="cv-section-title"><strong>${this.state.settings.language === "ar" ? "فجوات المهارات" : "Missing skills"}</strong></p>
+            <div class="cv-missing-list">
+              ${targetMatch.missingSkills.map((skill) => `<div class="cv-missing-item">${skill}</div>`).join("")}
+            </div>
+          </article>` : ""}
+          ${ai ? `
+            <article class="cv-section-card cv-ai-card">
+              <div class="cv-ai-grid">
+              <div class="cv-ai-head">
+                <p><strong>${this.state.settings.language === "ar" ? "تحليل الذكاء الاصطناعي حسب الوظيفة" : "AI role-focused analysis"}</strong></p>
+                ${aiTargetRole ? `<p class="cv-tag">${this.state.settings.language === "ar" ? "الوظيفة المستهدفة" : "Target role"}: ${aiTargetRole}</p>` : ""}
+              </div>
+              ${ai.job_fit_score !== null && ai.job_fit_score !== undefined ? `
+                <div class="cv-ai-capability" style="margin: 12px 0; padding: 12px; background: ${ai.job_fit_score >= 70 ? "rgba(76, 175, 80, 0.1)" : ai.job_fit_score >= 50 ? "rgba(255, 193, 7, 0.1)" : "rgba(244, 67, 54, 0.1)"}; border-left: 4px solid ${ai.job_fit_score >= 70 ? "#4caf50" : ai.job_fit_score >= 50 ? "#ffc107" : "#f44336"}; border-radius: 4px;">
+                  <p><strong>${this.state.settings.language === "ar" ? "نسبة الملاءمة للدور" : "Job fit score"}</strong>: ${ai.job_fit_score}%</p>
+                  ${ai.capability_assessment ? `<p style="font-size: 0.9em; margin-top: 6px; color: var(--text-soft);">${ai.capability_assessment}</p>` : ""}
+                </div>
+              ` : ""}
+              ${ai.summary ? `<p class="cv-ai-summary">${ai.summary}</p>` : ""}
+              <div class="cv-ai-row">
+                ${aiStrengths.length ? `<div class="cv-ai-column">
+                  <p><strong>${this.state.settings.language === "ar" ? "نِقَاط القوة" : "Strengths"}</strong></p>
+                  <ul>${aiStrengths.map((item) => `<li>${item}</li>`).join("")}</ul>
+                </div>` : ""}
+                ${aiWeaknesses.length ? `<div class="cv-ai-column">
+                  <p><strong>${this.state.settings.language === "ar" ? "نِقَاط الضعف" : "Weaknesses"}</strong></p>
+                  <ul>${aiWeaknesses.map((item) => `<li>${item}</li>`).join("")}</ul>
+                </div>` : ""}
+              </div>
+              <div class="cv-ai-row">
+                ${aiMissing.length ? `<div class="cv-ai-column">
+                  <p><strong>${this.state.settings.language === "ar" ? "مهارات ناقصة" : "Missing skills"}</strong></p>
+                  <ul>${aiMissing.map((item) => `<li>${item}</li>`).join("")}</ul>
+                </div>` : ""}
+                ${aiSuggestions.length ? `<div class="cv-ai-column">
+                  <p><strong>${this.state.settings.language === "ar" ? "اقتراحات عملية" : "Practical suggestions"}</strong></p>
+                  <ul>${aiSuggestions.map((item) => `<li>${item}</li>`).join("")}</ul>
+                </div>` : ""}
+              </div>
+              </div>
+            </article>
+          ` : ""}
         </div>
       `;
     }
@@ -993,6 +1349,7 @@
             scores: cvPayload.scores || null,
             matches: cvPayload.matches || [],
             plan: cvPayload.plan || null,
+            aiInsights: cvPayload.aiInsights || null,
             updatedAt: serverTimestamp()
           }
         },
@@ -1041,6 +1398,11 @@
           this.state.authResolved = true;
           this.persistSession();
 
+          // Auto-load real jobs for students
+          if (profile.role === "student") {
+            this.loadRealJobsAsync();
+          }
+
           const publicRoute = new Set(["landing", "login", "register", "forgot"]);
           if (publicRoute.has(this.state.route.name)) {
             this.go(this.defaultRouteForRole(profile.role));
@@ -1082,6 +1444,13 @@
         this.state.route = this.parseRoute();
         this.state.contactMenuOpen = false;
         this.state.servicesMenuOpen = false;
+        
+        // Reset CV analysis display when navigating away from upload page (page refresh behavior)
+        // Keep it saved in Firestore, but clear transient state for fresh analysis view
+        if (this.state.route !== "/upload-cv" && this.state.route !== "/cv") {
+          this.state.cvStatusMessage = "";
+        }
+        
         this.render();
       });
 
@@ -1136,6 +1505,20 @@
         }
         if (event.target.matches('input[name="behavior-answer"]')) {
           this.state.behaviorDraftAnswer = event.target.value;
+          if (this.state.behavioralTestActive && this.state.behavioralQuestions && this.state.behavioralQuestions.length > 0) {
+            const currentQuestion = this.state.behavioralQuestions[this.state.behavioralCurrentQuestion];
+            if (currentQuestion && currentQuestion.id) {
+              this.recordBehavioralAnswer(currentQuestion.id, event.target.value);
+              const isLastQuestion = this.state.behavioralCurrentQuestion >= this.state.behavioralQuestions.length - 1;
+              if (isLastQuestion) {
+                window.setTimeout(() => {
+                  this.completeBehavioralTest({ allowUnanswered: true });
+                }, 50);
+                return;
+              }
+              this.render();
+            }
+          }
         }
       });
 
@@ -1280,6 +1663,12 @@
 
         this.state.cvUploadPending = true;
         this.state.cvStatusMessage = this.state.settings.language === "ar" ? "جاري قراءة السيرة وتحليلها..." : "Reading and analyzing your CV...";
+        
+        // Clear the file input for fresh upload
+        if (input) {
+          input.value = "";
+        }
+        
         this.render();
 
         this.extractTextFromPdf(file)
@@ -1290,8 +1679,12 @@
               this.render();
               return;
             }
-            const selectedRole = document.getElementById("cvTargetRole") ? document.getElementById("cvTargetRole").value : this.state.selectedTargetRole;
+            const selectedRole = this.getProfileTargetRole(this.currentUser());
             const cvAnalysis = this.buildCvAnalysis(rawText, selectedRole);
+            const aiInsights = await this.fetchCvAiInsights(rawText, selectedRole);
+            if (aiInsights) {
+              cvAnalysis.aiInsights = aiInsights;
+            }
             await this.saveCvToFirestore(cvAnalysis);
 
             const currentUser = this.currentUser();
@@ -1351,12 +1744,104 @@
       if (action === "apply-job") {
         if (!progress) return;
         const jobId = target.dataset.jobId;
+        
+        // Require at least one CV upload before applying
+        if (!progress.cvUploaded) {
+          this.state.jobCvStatusMessage = this.state.settings.language === "ar"
+            ? "حمّل سيرتك أولاً لتستخدمها في التقديم."
+            : "Upload your CV once to apply.";
+          this.render();
+          return;
+        }
+
         if (!progress.appliedJobs.includes(jobId)) {
           progress.appliedJobs.push(jobId);
           this.persistProgress();
         }
+        this.state.jobCvStatusMessage = "";
         window.alert(this.state.settings.language === "ar" ? "تم تسجيل التقديم بنجاح" : "Application saved successfully");
         this.render();
+        return;
+      }
+
+      if (action === "upload-cv-job") {
+        if (this.state.cvUploadPending) {
+          return;
+        }
+        if (!auth.currentUser) {
+          this.state.jobCvStatusMessage = this.state.settings.language === "ar" ? "لازم تسجل دخول أول" : "You need to sign in first";
+          this.render();
+          return;
+        }
+        const jobId = target.dataset.jobId;
+        const input = document.getElementById(`jobCvInput-${jobId}`);
+        const file = input && input.files ? input.files[0] : null;
+        if (!file) {
+          this.state.jobCvStatusMessage = this.state.settings.language === "ar" ? "اختر ملف PDF أول" : "Choose a PDF first";
+          this.render();
+          return;
+        }
+        if (file.type !== "application/pdf") {
+          this.state.jobCvStatusMessage = this.state.settings.language === "ar" ? "الملف لازم يكون PDF" : "File must be a PDF";
+          this.render();
+          return;
+        }
+
+        this.state.cvUploadPending = true;
+        this.state.jobCvStatusMessage = this.state.settings.language === "ar" ? "جاري قراءة السيرة وتحليلها..." : "Reading and analyzing your CV...";
+        this.render();
+
+        this.extractTextFromPdf(file)
+          .then(async (rawText) => {
+            if (rawText.length < 50) {
+              this.state.jobCvStatusMessage = this.state.settings.language === "ar" ? "ما قدرت أطلع نص واضح من الـ PDF. ممكن يكون سكان/صورة." : "I could not extract clear text from the PDF. It may be a scan/image.";
+              this.state.cvUploadPending = false;
+              this.render();
+              return;
+            }
+            const selectedRole = this.getProfileTargetRole(this.currentUser());
+            const cvAnalysis = this.buildCvAnalysis(rawText, selectedRole);
+            const aiInsights = await this.fetchCvAiInsights(rawText, selectedRole);
+            if (aiInsights) {
+              cvAnalysis.aiInsights = aiInsights;
+            }
+            await this.saveCvToFirestore(cvAnalysis);
+
+            const currentUser = this.currentUser();
+            if (currentUser) {
+              currentUser.cvAnalysis = cvAnalysis;
+              if (currentUser.role === "student") {
+                currentUser.topSkills = Array.isArray(cvAnalysis.skills) ? cvAnalysis.skills.map((s) => typeof s === "string" ? s : s.name) : [];
+              }
+              this.persistAccounts();
+            }
+
+            // persist into progress so it can be reused across job applications
+            const progressSafe = this.currentProgress();
+            if (progressSafe) {
+              progressSafe.cvUploaded = true;
+              progressSafe.cvAnalysis = {
+                skills: Array.isArray(cvAnalysis.skills) ? cvAnalysis.skills.map((s) => typeof s === "string" ? s : s.name) : [],
+                seniority: cvAnalysis.parsedProfile?.seniority || "Entry",
+                recommendedRoles: (cvAnalysis.matches || []).slice(0, 2).map((match) => match.role),
+                baseScore: clamp(Math.round((cvAnalysis.scores?.TotalScore || 0) * 0.6), 0, 60)
+              };
+              progressSafe.readinessParts.cv = clamp(progressSafe.cvAnalysis.baseScore, 0, 60);
+              if (!progressSafe.badges.includes("CV Verified")) {
+                progressSafe.badges.push("CV Verified");
+              }
+              this.persistProgress();
+            }
+
+            this.state.jobCvStatusMessage = this.state.settings.language === "ar" ? "تم ✅ حفظ السيرة بنجاح. يمكنك التقديم الآن." : "Saved ✅ Your CV is ready. You can now apply.";
+            this.state.cvUploadPending = false;
+            this.render();
+          })
+          .catch((error) => {
+            this.state.jobCvStatusMessage = error.message || (this.state.settings.language === "ar" ? "تعذر تحليل السيرة حالياً" : "Unable to analyze the CV right now");
+            this.state.cvUploadPending = false;
+            this.render();
+          });
         return;
       }
 
@@ -1456,25 +1941,268 @@
         return;
       }
 
-      if (action === "next-interview") {
-        const answer = (this.state.aiInterviewDrafts[this.state.aiInterviewIndex] || "").trim();
-        if (!answer) {
-          window.alert(this.state.settings.language === "ar" ? "أدخل إجابة مختصرة" : "Enter a short answer");
+      // ============================================
+      // AI Behavioral Assessment Actions
+      // ============================================
+
+      if (action === "start-behavioral-test") {
+        this.loadBehavioralQuestions();
+        return;
+      }
+
+      if (action.startsWith("record-behavioral-answer|")) {
+        const parts = action.split("|");
+        const questionId = parts[1];
+        const optionId = parts[2];
+        this.recordBehavioralAnswer(questionId, optionId);
+        this.render();
+        return;
+      }
+
+      if (action === "next-behavioral-question") {
+        this.nextBehavioralQuestion();
+        return;
+      }
+
+      if (action === "prev-behavioral-question") {
+        if (this.state.behavioralCurrentQuestion > 0) {
+          this.state.behavioralCurrentQuestion -= 1;
+          const questions = this.state.behavioralQuestions || [];
+          const currentQuestion = questions[this.state.behavioralCurrentQuestion];
+          this.state.behavioralTimer = currentQuestion?.timeLimit || 120;
+          this.startBehavioralTimer();
+          this.render();
+        }
+        return;
+      }
+
+      if (action === "complete-behavioral-test") {
+        this.completeBehavioralTest();
+        return;
+      }
+
+      if (action === "retake-behavioral-test") {
+        console.log("Retake behavioral test clicked");
+        this.stopBehavioralTimer();
+        const progress = this.currentProgress();
+        if (progress) {
+          progress.behavior = {
+            completed: false,
+            scores: null
+          };
+          progress.readinessParts.behavior = 0;
+          progress.badges = progress.badges.filter((badge) => badge !== "Behavioral Ready");
+          this.persistProgress();
+        }
+
+        // Reset behavioral test state
+        this.state.behavioralQuestions = null;
+        this.state.behavioralAnswers = {};
+        this.state.behavioralCurrentQuestion = 0;
+        this.state.behavioralTimer = 120;
+        this.state.behavioralTestActive = false;
+        this.state.behavioralLoading = false;
+        this.state.behavioralResultReady = false;
+        this.state.behavioralLatestScores = null;
+        // Immediately start a fresh assessment with new questions
+        this.loadBehavioralQuestions();
+        return;
+      }
+if (action === "start-mic") {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert("عذراً، متصفحك لا يدعم المايكروفون.");
           return;
         }
+        const recognition = new SpeechRecognition();
+        
+        // FLAWLESS EXECUTION: Automatically syncs Mic language to App language!
+        recognition.lang = this.state.settings.language === "ar" ? 'ar-SA' : 'en-US'; 
+        
+        recognition.onresult = (event) => {
+          const text = event.results[0][0].transcript;
+          const currentText = this.state.aiInterviewDrafts[this.state.aiInterviewIndex] || "";
+          // Adds your spoken words cleanly
+          this.state.aiInterviewDrafts[this.state.aiInterviewIndex] = (currentText + " " + text).trim();
+          this.render(); 
+        };
+        
+        recognition.start();
+        this.showToast(this.state.settings.language === "ar" ? "🎤 جاري الاستماع... تحدث الآن" : "🎤 Listening... speak now");
+        return;
+      }
+
+    if (action === "read-question") {
+        const currentQ = DATA.interviewQuestions[this.state.aiInterviewIndex];
+        const isAr = this.state.settings.language === "ar";
+        const textToRead = isAr ? currentQ.qAr : currentQ.qEn;
+        
+        window.speechSynthesis.cancel(); // Stop any current speech
+        const msg = new SpeechSynthesisUtterance(textToRead);
+        
+        // Force language
+        msg.lang = isAr ? 'ar-SA' : 'en-US'; 
+        
+        // VOICE TUNING: Slower rate and lower pitch makes Arabic sound much less robotic
+        msg.rate = isAr ? 0.85 : 0.95; 
+        msg.pitch = isAr ? 0.9 : 1.0; 
+        
+        // Advanced Premium Voice Hunter (waits for voices to load)
+        const findAndSpeak = () => {
+           let voices = window.speechSynthesis.getVoices();
+           
+           // Priority 1: Look for Neural, Natural, or Premium voices (Edge/Mac)
+           let bestVoice = voices.find(v => 
+               v.lang.includes(isAr ? 'ar' : 'en') && 
+               (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Siri') || v.name.includes('Premium'))
+           );
+           
+           // Priority 2: Look for Google's specific voices
+           if (!bestVoice) {
+               bestVoice = voices.find(v => v.lang.includes(isAr ? 'ar' : 'en') && v.name.includes('Google'));
+           }
+
+           // Priority 3: Fallback to ANY available voice for that language
+           if (!bestVoice) {
+               bestVoice = voices.find(v => v.lang.includes(isAr ? 'ar' : 'en'));
+           }
+
+           if (bestVoice) {
+               msg.voice = bestVoice;
+           }
+
+           window.speechSynthesis.speak(msg);
+        };
+
+        // Hackathon fix: Browsers sometimes take a second to load voices. If empty, wait for them.
+        if (window.speechSynthesis.getVoices().length === 0) {
+            window.speechSynthesis.onvoiceschanged = findAndSpeak;
+        } else {
+            findAndSpeak();
+        }
+        
+        return;
+      }
+     if (action === "start-mic") {
+        if (this.state.micActive) {
+           if(window._activeRecognition) window._activeRecognition.stop();
+           this.state.micActive = false;
+           this.render();
+           return;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert(this.state.settings.language === "ar" ? "المتصفح لا يدعم المايكروفون. استخدم Chrome." : "Browser doesn't support microphone. Use Chrome.");
+          return;
+        }
+        
+        const recognition = new SpeechRecognition();
+        window._activeRecognition = recognition;
+        
+        // Dynamic Language Sync
+        recognition.lang = this.state.settings.language === "ar" ? 'ar-SA' : 'en-US'; 
+        recognition.interimResults = true; 
+        recognition.continuous = true; 
+        
+        this.state.micActive = true;
+        this.render();
+
+        recognition.onresult = (event) => {
+          let finalTranscript = '';
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          
+          const currentIndex = this.state.aiInterviewIndex;
+          if (!this.state.aiInterviewFinalDrafts) this.state.aiInterviewFinalDrafts = {};
+          
+          if (finalTranscript) {
+              const currentFinal = this.state.aiInterviewFinalDrafts[currentIndex] || "";
+              this.state.aiInterviewFinalDrafts[currentIndex] = (currentFinal + " " + finalTranscript).trim();
+          }
+          
+          const baseFinal = this.state.aiInterviewFinalDrafts[currentIndex] || "";
+          this.state.aiInterviewDrafts[currentIndex] = (baseFinal + " " + interimTranscript).trim();
+          
+          this.render(); 
+        };
+
+        recognition.onerror = () => { this.state.micActive = false; this.render(); };
+        recognition.onend = () => { this.state.micActive = false; this.render(); };
+        
+        recognition.start();
+        return;
+      }
+
+      if (action === "read-question") {
+        const currentQ = DATA.interviewQuestions[this.state.aiInterviewIndex];
+        const isAr = this.state.settings.language === "ar";
+        const textToRead = isAr ? currentQ.qAr : currentQ.qEn;
+        
+        window.speechSynthesis.cancel(); 
+        const msg = new SpeechSynthesisUtterance(textToRead);
+        
+        msg.lang = isAr ? 'ar-SA' : 'en-US'; 
+        msg.rate = isAr ? 0.85 : 0.95; 
+        
+        // Hunt for premium voices
+        const voices = window.speechSynthesis.getVoices();
+        const bestVoice = voices.find(v => v.lang.includes(isAr ? 'ar' : 'en') && (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('Natural') || v.name.includes('Siri')));
+        if(bestVoice) msg.voice = bestVoice;
+
+        window.speechSynthesis.speak(msg);
+        return;
+      }
+
+      if (action === "next-interview") {
+        if(window._activeRecognition) {
+            window._activeRecognition.stop();
+            this.state.micActive = false;
+        }
+
+        const answer = (this.state.aiInterviewDrafts[this.state.aiInterviewIndex] || "").trim();
+        if (!answer) {
+          window.alert(this.state.settings.language === "ar" ? "يرجى التحدث للإجابة أولاً" : "Please speak your answer first");
+          return;
+        }
+        
         if (this.state.aiInterviewIndex < DATA.interviewQuestions.length - 1) {
           this.state.aiInterviewIndex += 1;
+          
+          setTimeout(() => {
+             const readBtn = document.querySelector('[data-action="read-question"]');
+             if(readBtn) readBtn.click();
+          }, 400);
+
         } else {
-          const nonEmpty = Object.values(this.state.aiInterviewDrafts).filter(Boolean).length;
-          const progressSafe = progress || this.currentProgress();
+          const progressSafe = this.currentProgress();
+          let scores;
+          try {
+            scores = this.scoreInterviewAnswers(this.state.aiInterviewDrafts);
+          } catch (error) {
+            scores = { overall: 15, feedback: [this.state.settings.language === "ar" ? "تعذر التقييم الكامل، يرجى المحاولة مرة أخرى." : "Scoring fallback applied, please try again."] };
+          }
           if (progressSafe) {
             progressSafe.interview.completed = true;
-            progressSafe.interview.score = clamp(60 + nonEmpty * 7, 0, 95);
+            progressSafe.interview.score = scores.overall;
+            progressSafe.interview.feedback = scores.feedback;
             if (progressSafe.interview.score >= 85 && !progressSafe.badges.includes("Interview Ready")) {
               progressSafe.badges.push("Interview Ready");
             }
             this.persistProgress();
+          } else {
+            this.state.progress["local-interview"] = {
+              interview: { completed: true, score: scores.overall, feedback: scores.feedback },
+              badges: [], readinessParts: { cv: 0, micro: 0, behavior: 0, plan: 0 }
+            };
           }
+          this.state.aiInterviewScoreDetail = scores;
           this.state.aiInterviewDone = true;
         }
         this.render();
@@ -1483,19 +2211,56 @@
 
       if (action === "reset-interview") {
         this.state.aiInterviewDrafts = {};
+        this.state.aiInterviewFinalDrafts = {};
         this.state.aiInterviewIndex = 0;
         this.state.aiInterviewDone = false;
+        this.state.aiInterviewScoreDetail = null;
+        this.state.micActive = false;
+        if(window._activeRecognition) window._activeRecognition.stop();
+        window.speechSynthesis.cancel();
         this.render();
         return;
       }
 
       if (action === "download-profile") {
-        window.alert(this.state.settings.language === "ar" ? "تم تجهيز بطاقة PNG للتنزيل (محاكاة)" : "PNG card prepared for download (simulation)");
+        const ok = this.downloadSmartProfilePng();
+        if (ok) {
+          this.showToast(this.state.settings.language === "ar" ? "تم تنزيل صورة PNG بنجاح" : "PNG downloaded successfully");
+        } else {
+          this.showToast(this.state.settings.language === "ar" ? "تعذر تنزيل الصورة حالياً" : "Unable to download PNG right now");
+        }
+        return;
+      }
+
+      if (action === "save-target-role") {
+        const user = this.currentUser();
+        if (!user) return;
+        const select = document.getElementById("profileTargetRole");
+        const selected = select ? select.value : "";
+        if (!selected) {
+          this.showToast(this.state.settings.language === "ar" ? "اختر دوراً مستهدفاً" : "Choose a target role");
+          return;
+        }
+
+        const match = DATA.jobs.find((job) => job.titleEn === selected || job.titleAr === selected);
+        user.desiredRole = match ? match.titleEn : selected;
+        user.targetRoleEn = match ? match.titleEn : selected;
+        user.targetRoleAr = match ? match.titleAr : selected;
+        this.state.selectedTargetRole = user.targetRoleEn;
+
+        this.persistAccounts();
+        this.showToast(this.state.settings.language === "ar" ? "تم حفظ الدور المستهدف" : "Target role saved");
+        this.render();
         return;
       }
 
       if (action === "invite-candidate") {
+        const candidateId = target.dataset.candidateId;
+        if (candidateId) {
+          this.markCandidateInvited(candidateId);
+        }
         window.alert(this.state.settings.language === "ar" ? "تم إرسال الدعوة للمقابلة" : "Interview invite sent");
+        this.render();
         return;
       }
 
@@ -1684,7 +2449,8 @@
         };
         this.state.companyRoles = [roleReq];
         this.persistCompanyRoles();
-        this.go("/company-dashboard");
+        this.showToast(this.state.settings.language === "ar" ? "تم تحديث الترتيب للمرشحين" : "Ranked candidates for this role");
+        this.render();
         return;
       }
 
@@ -1751,12 +2517,445 @@
       return clamp(Math.round(sum), 0, 100);
     }
 
+    async fetchRealJobs(role = "Frontend Developer", location = "Saudi Arabia") {
+      try {
+        const url = `/.netlify/functions/fetch-jobs?role=${encodeURIComponent(role)}&location=${encodeURIComponent(location)}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.error("[fetch-real-jobs] API failed", response.status);
+          return null;
+        }
+        const data = await response.json();
+        if (!data || data.source === "mock") {
+          console.warn("[fetch-real-jobs] Ignoring mock jobs for strict external sourcing");
+          return [];
+        }
+        console.log("[fetch-real-jobs] Success", {
+          count: data.data ? data.data.length : 0,
+          source: data.source
+        });
+        return data.data || [];
+      } catch (error) {
+        console.error("[fetch-real-jobs] Error", error);
+        return null;
+      }
+    }
+
+    async loadRealJobsAsync() {
+      try {
+        this.state.jobsLoading = true;
+        
+        // Fetch real jobs for multiple common roles
+        const roles = ["Frontend Developer", "Backend Developer", "Data Analyst", "Product Manager"];
+        const allJobs = [];
+
+        for (const role of roles) {
+          const jobs = await this.fetchRealJobs(role, "Saudi Arabia");
+          if (jobs && jobs.length > 0) {
+            allJobs.push(...jobs);
+          }
+        }
+
+        if (allJobs.length > 0) {
+          this.state.realJobs = allJobs.slice(0, 50); // Limit to 50 jobs
+          console.log("[load-real-jobs] Loaded", allJobs.length, "real jobs");
+          this.render();
+        }
+      } catch (error) {
+        console.error("[load-real-jobs] Error", error);
+      } finally {
+        this.state.jobsLoading = false;
+      }
+    }
+
+    // ============================================
+    // Behavioral Simulation Questions
+    // ============================================
+
+    async fetchBehavioralQuestions(role) {
+      try {
+        if (!role) return null;
+        
+        const response = await fetch(
+          `/.netlify/functions/generate-behavior-questions?role=${encodeURIComponent(role)}&locale=${this.state.settings.language}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.questions || null;
+      } catch (error) {
+        console.error("[fetch-behavioral] Error:", error);
+        return null;
+      }
+    }
+
+    normalizeBehavioralQuestions(questions) {
+      if (!Array.isArray(questions)) return [];
+
+      return questions
+        .map((question, index) => {
+          const rawOptions = Array.isArray(question.options) ? question.options : [];
+          const options = rawOptions
+            .filter((option) => option && option.id)
+            .map((option, optionIndex) => {
+              const inferredScore = Number.isFinite(option.score)
+                ? option.score
+                : clamp(Math.round((((option.communication || 0) + (option.empathy || 0) + (option.problem || 0)) / 15) * 100), 0, 100);
+
+              return {
+                id: option.id || `${index + 1}-${optionIndex + 1}`,
+                textEn: option.textEn || option.text || "",
+                textAr: option.textAr || option.text || "",
+                score: inferredScore
+              };
+            });
+
+          const scenario = question.scenario || question.titleEn || question.titleAr || "";
+          const questionEn = question.questionEn || question.descriptionEn || question.question || "";
+          const questionAr = question.questionAr || question.descriptionAr || question.question || questionEn;
+
+          if (!scenario || !questionEn || options.length < 2) {
+            return null;
+          }
+
+          return {
+            id: question.id || `q${index + 1}`,
+            scenario,
+            questionEn,
+            questionAr,
+            options,
+            timeLimit: Number.isFinite(question.timeLimit) ? question.timeLimit : 120,
+            skillsTested: Array.isArray(question.skillsTested)
+              ? question.skillsTested
+              : (Array.isArray(question.skills_tested) ? question.skills_tested : ["communication", "problem_solving"])
+          };
+        })
+        .filter(Boolean);
+    }
+
+    getLocalBehavioralQuestions() {
+      return this.normalizeBehavioralQuestions(this.getBehaviorScenarios()).slice(0, 5);
+    }
+
+    stopBehavioralTimer() {
+      if (this.behavioralInterval) {
+        clearInterval(this.behavioralInterval);
+        this.behavioralInterval = null;
+      }
+    }
+
+    startBehavioralTimer() {
+      this.stopBehavioralTimer();
+      if (!this.state.behavioralTestActive || !this.state.behavioralQuestions || !this.state.behavioralQuestions.length) {
+        return;
+      }
+
+      this.behavioralInterval = window.setInterval(() => {
+        if (!this.state.behavioralTestActive) {
+          this.stopBehavioralTimer();
+          return;
+        }
+
+        if (this.state.behavioralTimer > 0) {
+          this.state.behavioralTimer -= 1;
+          this.render();
+          return;
+        }
+
+        const currentQuestion = this.state.behavioralQuestions[this.state.behavioralCurrentQuestion];
+        if (currentQuestion && this.state.behavioralAnswers[currentQuestion.id] == null) {
+          this.state.behavioralAnswers[currentQuestion.id] = "";
+        }
+
+        const isLastQuestion = this.state.behavioralCurrentQuestion >= this.state.behavioralQuestions.length - 1;
+        if (isLastQuestion) {
+          this.completeBehavioralTest({ allowUnanswered: true });
+        } else {
+          this.state.behavioralCurrentQuestion += 1;
+          const nextQuestion = this.state.behavioralQuestions[this.state.behavioralCurrentQuestion];
+          this.state.behavioralTimer = nextQuestion?.timeLimit || 120;
+          this.render();
+        }
+      }, 1000);
+    }
+
+    async loadBehavioralQuestions() {
+      const user = this.currentUser();
+      if (!user) return;
+
+      const desiredRole = user.desiredRole || user.targetRoleEn || "Frontend Developer";
+      
+      this.stopBehavioralTimer();
+      this.state.behavioralLoading = true;
+      this.state.behavioralResultReady = false;
+      this.state.behavioralLatestScores = null;
+      this.state.behavioralQuestions = null;
+      this.state.behavioralAnswers = {};
+      this.state.behavioralCurrentQuestion = 0;
+      this.state.behavioralTimer = 120;
+      this.state.behavioralRole = desiredRole;
+      this.render();
+
+      try {
+        const questions = await this.fetchBehavioralQuestions(desiredRole);
+        const normalizedQuestions = this.normalizeBehavioralQuestions(questions);
+        
+        if (normalizedQuestions.length > 0) {
+          // Shuffle questions for randomization
+          this.state.behavioralQuestions = this.shuffleArray(normalizedQuestions);
+          
+          // Initialize answer tracking
+          this.state.behavioralQuestions.forEach((q) => {
+            this.state.behavioralAnswers[q.id] = null;
+          });
+
+          this.state.behavioralCurrentQuestion = 0;
+          this.state.behavioralTimer = this.state.behavioralQuestions[0]?.timeLimit || 120;
+          this.state.behavioralTestActive = true;
+          this.startBehavioralTimer();
+          console.log("[behavioral-load] Loaded", normalizedQuestions.length, "questions for", desiredRole);
+        } else {
+          const fallbackQuestions = this.getLocalBehavioralQuestions();
+          if (fallbackQuestions.length > 0) {
+            this.state.behavioralQuestions = this.shuffleArray(fallbackQuestions);
+            this.state.behavioralQuestions.forEach((q) => {
+              this.state.behavioralAnswers[q.id] = null;
+            });
+            this.state.behavioralCurrentQuestion = 0;
+            this.state.behavioralTimer = this.state.behavioralQuestions[0]?.timeLimit || 120;
+            this.state.behavioralTestActive = true;
+            this.startBehavioralTimer();
+            this.showToast(this.state.settings.language === "ar"
+              ? "تم تشغيل نسخة محلية من أسئلة الاختبار"
+              : "Loaded local fallback assessment questions");
+          } else {
+            this.showToast(this.state.settings.language === "ar" 
+              ? "لم يتمكن من تحميل الأسئلة. حاول لاحقاً."
+              : "Failed to load questions. Try again later.");
+          }
+        }
+      } catch (error) {
+        console.error("[behavioral-load] Error:", error);
+        const fallbackQuestions = this.getLocalBehavioralQuestions();
+        if (fallbackQuestions.length > 0) {
+          this.state.behavioralQuestions = this.shuffleArray(fallbackQuestions);
+          this.state.behavioralQuestions.forEach((q) => {
+            this.state.behavioralAnswers[q.id] = null;
+          });
+          this.state.behavioralCurrentQuestion = 0;
+          this.state.behavioralTimer = this.state.behavioralQuestions[0]?.timeLimit || 120;
+          this.state.behavioralTestActive = true;
+          this.startBehavioralTimer();
+          this.showToast(this.state.settings.language === "ar"
+            ? "تعذر جلب الأسئلة من الخادم، تم استخدام النسخة المحلية"
+            : "Server questions unavailable, using local fallback");
+        } else {
+          this.showToast(this.state.settings.language === "ar"
+            ? "خطأ في تحميل الأسئلة"
+            : "Error loading questions");
+        }
+      } finally {
+        this.state.behavioralLoading = false;
+        this.render();
+      }
+    }
+
+    recordBehavioralAnswer(questionId, optionId) {
+      if (this.state.behavioralAnswers && questionId && optionId) {
+        this.state.behavioralAnswers[questionId] = optionId;
+        console.log("[behavioral-answer] Q:", questionId, "A:", optionId);
+      }
+    }
+
+    syncCurrentBehavioralAnswerFromDom() {
+      if (!this.state.behavioralQuestions || !this.state.behavioralQuestions.length) return null;
+      const currentQuestion = this.state.behavioralQuestions[this.state.behavioralCurrentQuestion];
+      if (!currentQuestion) return null;
+
+      const checked = document.querySelector('input[name="behavior-answer"]:checked');
+      if (checked && checked.value) {
+        this.recordBehavioralAnswer(currentQuestion.id, checked.value);
+      }
+
+      return this.state.behavioralAnswers[currentQuestion.id] || null;
+    }
+
+    nextBehavioralQuestion() {
+      if (!this.state.behavioralQuestions) return;
+      const currentAnswer = this.syncCurrentBehavioralAnswerFromDom();
+      if (!currentAnswer) {
+        this.showToast(this.state.settings.language === "ar" ? "اختر إجابة أولاً" : "Choose an answer first");
+        return;
+      }
+      
+      const currentIdx = this.state.behavioralCurrentQuestion;
+      const nextIdx = currentIdx + 1;
+
+      if (nextIdx < this.state.behavioralQuestions.length) {
+        this.state.behavioralCurrentQuestion = nextIdx;
+        this.state.behavioralTimer = this.state.behavioralQuestions[nextIdx].timeLimit || 120;
+        this.startBehavioralTimer();
+        this.render();
+      } else {
+        // All questions completed
+        this.completeBehavioralTest();
+      }
+    }
+
+    completeBehavioralTest(options = {}) {
+      if (this.state.behavioralResultReady && !this.state.behavioralTestActive) {
+        return;
+      }
+      const user = this.currentUser();
+      if (!user) return;
+      this.stopBehavioralTimer();
+      const currentAnswer = this.syncCurrentBehavioralAnswerFromDom();
+      const currentQuestion = this.state.behavioralQuestions
+        ? this.state.behavioralQuestions[this.state.behavioralCurrentQuestion]
+        : null;
+      if (!currentAnswer && currentQuestion && this.state.behavioralAnswers) {
+        this.state.behavioralAnswers[currentQuestion.id] = "";
+      }
+
+      // Calculate scores based on answers
+      const scores = this.calculateBehavioralScores();
+      this.state.behavioralLatestScores = scores;
+      this.state.behavioralResultReady = true;
+
+      // Clear test state first, then render results immediately.
+      this.state.behavioralTestActive = false;
+      this.state.behavioralQuestions = null;
+      this.state.behavioralAnswers = {};
+      this.state.behavioralCurrentQuestion = 0;
+      this.state.behavioralTimer = 120;
+      this.render();
+
+      try {
+        const progress = this.currentProgress();
+        if (progress) {
+          if (!progress.readinessParts) {
+            progress.readinessParts = { cv: 0, micro: 0, behavior: 0, plan: 0 };
+          }
+          if (!Array.isArray(progress.badges)) {
+            progress.badges = [];
+          }
+
+          // Save to progress
+          progress.behavior = {
+            completed: true,
+            scores,
+            date: new Date().toISOString(),
+            desiredRole: user.desiredRole || user.targetRoleEn
+          };
+
+          // Update readiness and badges from behavioral test outcome
+          const behavioralReadiness = clamp(Math.round((scores.overall / 100) * 15), 0, 15);
+          progress.readinessParts.behavior = behavioralReadiness;
+          if (behavioralReadiness >= 13) {
+            if (!progress.badges.includes("Behavioral Ready")) {
+              progress.badges.push("Behavioral Ready");
+            }
+          } else {
+            progress.badges = progress.badges.filter((badge) => badge !== "Behavioral Ready");
+          }
+          this.persistProgress();
+        }
+      } catch (error) {
+        console.error("[behavioral-complete] Persist failed:", error);
+      }
+
+      this.showToast(this.state.settings.language === "ar"
+        ? "✓ تم إكمال الاختبار السلوكي"
+        : "✓ Behavioral test completed");
+
+      console.log("[behavioral-complete] Scores:", scores);
+    }
+
+    calculateBehavioralScores() {
+      if (!this.state.behavioralQuestions || !this.state.behavioralAnswers) {
+        return { communication: 0, empathy: 0, problem_solving: 0, overall: 0 };
+      }
+
+      const skillScores = {
+        communication: [],
+        empathy: [],
+        problem_solving: [],
+        judgment: [],
+        accountability: [],
+        integrity: []
+      };
+
+      // Calculate score for each skill
+      this.state.behavioralQuestions.forEach((question) => {
+        const answeredOptionId = this.state.behavioralAnswers[question.id];
+        if (!answeredOptionId) return;
+
+        const selectedOption = question.options.find((opt) => opt.id === answeredOptionId);
+        if (!selectedOption) return;
+
+        const score = selectedOption.score || 0;
+
+        // Distribute score to skills tested by this question
+        const skills = question.skillsTested || [];
+        skills.forEach((skill) => {
+          if (skillScores[skill]) {
+            skillScores[skill].push(score);
+          }
+        });
+      });
+
+      // Average scores per skill (out of 100)
+      const averages = {};
+      Object.keys(skillScores).forEach((skill) => {
+        const scores = skillScores[skill];
+        if (scores.length > 0) {
+          averages[skill] = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+        } else {
+          averages[skill] = 0;
+        }
+      });
+
+      // Calculate overall score (average of key skills)
+      const keySkills = ["communication", "problem_solving", "accountability"];
+      const overallScore = Math.round(
+        keySkills.reduce((sum, skill) => sum + (averages[skill] || 0), 0) / keySkills.length
+      );
+
+      return {
+        communication: averages.communication || 0,
+        empathy: averages.empathy || 0,
+        problem_solving: averages.problem_solving || 0,
+        integrity: averages.integrity || 0,
+        accountability: averages.accountability || 0,
+        overall: overallScore
+      };
+    }
+
+    shuffleArray(array) {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+
     getMatchesForUser(user) {
       const skills = (user.topSkills || []).map((item) => item.toLowerCase());
-      return DATA.jobs.map((job) => {
+      // LinkedIn jobs for everyone; Sara demo account can fall back to local demo jobs.
+      const jobsToMatch = this.state.realJobs && this.state.realJobs.length > 0
+        ? this.state.realJobs
+        : (this.isSaraDemoUser(user) ? DATA.jobs : []);
+      
+      return jobsToMatch.map((job) => {
         const matchedSkills = job.skills.filter((skill) => skills.includes(skill.toLowerCase()));
         const missingSkills = job.skills.filter((skill) => !skills.includes(skill.toLowerCase()));
-        const match = clamp(Math.round((matchedSkills.length / job.skills.length) * 100), 15, 98);
+        const match = job.skills.length > 0 
+          ? clamp(Math.round((matchedSkills.length / job.skills.length) * 100), 15, 98)
+          : 50;
         return { job, matchedSkills, missingSkills, match };
       }).sort((a, b) => b.match - a.match);
     }
@@ -1774,9 +2973,14 @@
     }
 
     getSkillGaps(user) {
-      const topMatch = this.getMatchesForUser(user)[0];
-      if (!topMatch) return [];
-      return topMatch.missingSkills.map((skill, index) => ({
+      const targetRole = this.getProfileTargetRole(user).toLowerCase();
+      const matches = this.getMatchesForUser(user);
+      const targetMatch = matches.find((item) => {
+        const roleLabel = String(this.jobTitle(item.job) || "").toLowerCase();
+        return roleLabel === targetRole || roleLabel.includes(targetRole) || targetRole.includes(roleLabel);
+      }) || matches[0];
+      if (!targetMatch) return [];
+      return targetMatch.missingSkills.map((skill, index) => ({
         skill,
         current: index === 0 ? "20%" : "35%",
         target: "85%",
@@ -1787,23 +2991,30 @@
 
     getLearningSuggestions(skill) {
       const normalized = String(skill || "").toLowerCase();
+      const q = encodeURIComponent(String(skill || "").trim());
+      const satrSearch = `https://satr.codes/search?q=${q}`;
+      const youtubeSearch = `https://www.youtube.com/results?search_query=${q}`;
+      const docsSearch = `https://www.google.com/search?q=${encodeURIComponent(`${skill} official documentation`)}`;
       const maps = {
         "data analysis": [
           {
             sourceAr: "منصة سطر",
             sourceEn: "Satr Platform",
+            url: "https://satr.codes",
             noteAr: "ابدأ بمسار تحليل البيانات التأسيسي لفهم المفاهيم بشكل مرتب.",
             noteEn: "Start with a structured data-analysis foundation track."
           },
           {
             sourceAr: "YouTube",
             sourceEn: "YouTube",
+            url: "https://www.youtube.com/results?search_query=data+analysis+tutorial",
             noteAr: "ابحث عن شروحات تطبيقية على مجموعات بيانات حقيقية وتمارين عملية.",
             noteEn: "Use practical walkthroughs on real datasets and exercises."
           },
           {
             sourceAr: "Kaggle",
             sourceEn: "Kaggle",
+            url: "https://www.kaggle.com/learn",
             noteAr: "تدرّب على ملفات جاهزة ومسابقات بسيطة لبناء فهم تطبيقي أسرع.",
             noteEn: "Practice on starter datasets and simple notebooks."
           }
@@ -1812,18 +3023,21 @@
           {
             sourceAr: "منصة سطر",
             sourceEn: "Satr Platform",
+            url: "https://satr.codes",
             noteAr: "خذ مسار SQL من البداية حتى الاستعلامات المتوسطة والمتقدمة.",
             noteEn: "Use a guided SQL path from basics to intermediate queries."
           },
           {
             sourceAr: "SQLBolt",
             sourceEn: "SQLBolt",
+            url: "https://sqlbolt.com/",
             noteAr: "تمارين قصيرة وسريعة لتثبيت المفاهيم الأساسية خطوة بخطوة.",
             noteEn: "Short guided drills to reinforce core concepts."
           },
           {
             sourceAr: "Mode SQL Tutorial",
             sourceEn: "Mode SQL Tutorial",
+            url: "https://mode.com/sql-tutorial/",
             noteAr: "أمثلة تحليلية أقرب لبيئة العمل والبيانات الواقعية.",
             noteEn: "Analytical examples closer to real work scenarios."
           }
@@ -1838,18 +3052,21 @@
         {
           sourceAr: "منصة سطر",
           sourceEn: "Satr Platform",
+          url: satrSearch,
           noteAr: `ابحث عن مسار تأسيسي في ${skill} لبناء القاعدة بشكل مرتب.`,
           noteEn: `Start with a structured foundation path for ${skill}.`
         },
         {
           sourceAr: "YouTube",
           sourceEn: "YouTube",
+          url: youtubeSearch,
           noteAr: `ركّز على شروحات تطبيقية وتمارين قصيرة حول ${skill}.`,
           noteEn: `Focus on practical tutorials and short exercises for ${skill}.`
         },
         {
           sourceAr: "المراجع الرسمية",
           sourceEn: "Official docs",
+          url: docsSearch,
           noteAr: `ارجع للمراجع الأصلية حتى تربط التعلم النظري بالتطبيق.`,
           noteEn: "Use official references to connect theory with implementation."
         }
@@ -1902,21 +3119,40 @@
     }
 
     rankCandidates(roleReq) {
-      return this.state.accounts.students.map((student) => {
+      const scored = this.state.accounts.students.map((student) => {
         const studentSkills = (student.topSkills || []).map((item) => item.toLowerCase());
-        const matchedSkills = roleReq.requiredSkills.filter((skill) => studentSkills.includes(skill.toLowerCase()));
+        const matchedSkills = roleReq.requiredSkills.filter((skill) => {
+          const s = skill.toLowerCase();
+          return studentSkills.some((stu) => stu.includes(s) || s.includes(stu));
+        });
         const skillMatch = roleReq.requiredSkills.length ? Math.round((matchedSkills.length / roleReq.requiredSkills.length) * 100) : 0;
         const readiness = this.getReadiness(student.id);
-        const overall = Math.round(skillMatch * 0.55 + readiness * 0.45);
+        const studentRole = (student.targetRoleEn || "").toLowerCase();
+        const roleTitle = (roleReq.title || "").toLowerCase();
+        const titleMatch = roleTitle && studentRole.includes(roleTitle) ? 100 : (roleTitle && roleTitle.split(" ").some((word) => word && studentRole.includes(word)) ? 70 : 40);
+        const studentCity = (student.city || "").toLowerCase();
+        const roleCity = (roleReq.location || "").toLowerCase();
+        const cityMatch = roleCity ? (studentCity === roleCity ? 100 : (studentCity && roleCity && studentCity.split(" ").some((part) => roleCity.includes(part)) ? 60 : 35)) : 50;
+        const overall = Math.round(skillMatch * 0.45 + titleMatch * 0.25 + readiness * 0.2 + cityMatch * 0.1);
         return {
           student,
           readiness,
           skillMatch,
+          titleMatch,
+          cityMatch,
           overall,
           matchedSkills,
           missingSkills: roleReq.requiredSkills.filter((skill) => !studentSkills.includes(skill.toLowerCase()))
         };
-      }).sort((a, b) => b.overall - a.overall);
+      });
+
+      return scored.sort((a, b) => {
+        if (b.overall !== a.overall) return b.overall - a.overall;
+        if (b.skillMatch !== a.skillMatch) return b.skillMatch - a.skillMatch;
+        if (b.titleMatch !== a.titleMatch) return b.titleMatch - a.titleMatch;
+        if (b.readiness !== a.readiness) return b.readiness - a.readiness;
+        return b.cityMatch - a.cityMatch;
+      });
     }
 
     topBar() {
@@ -1933,8 +3169,7 @@
               ["/market-shift", this.state.settings.language === "ar" ? "توقعات السوق" : "Market Shift Predictor"],
               ["/micro-labs-test", this.state.settings.language === "ar" ? "مختبر المهارات" : "Micro Labs Test"],
               ["/behavior", this.state.settings.language === "ar" ? "محاكاة سلوكية" : "Behavioral Simulation"],
-              ["/interview", this.t("interview")],
-              ["/profile", this.t("profile")]
+              ["/interview", this.t("interview")]
             ]
           : [
               ["/market-shift", this.state.settings.language === "ar" ? "توقعات السوق" : "Market Shift Predictor"],
@@ -1947,8 +3182,10 @@
         <header class="topbar glass">
           <div class="topbar-main">
             <button class="brand" data-nav="/">
-              <img class="brand-logo" src="./assets/logo.PNG" alt="${this.t("brand")}">
+              <img class="brand-logo light-logo" src="./assets/logo.PNG" alt="${this.t("brand")}">
+              <img class="brand-logo dark-logo" src="./assets/Dark-Logo.png" alt="${this.t("brand")}">
             </button>
+            ${user && user.role === "student" ? `<button class="btn btn-ghost" data-nav="/profile">${this.t("profile")}</button>` : ""}
             <nav class="${navClass}">
             ${isPublic || showLandingMixedNav ? `
               <button data-nav="/">${this.t("navHome")}</button>
@@ -2034,7 +3271,7 @@
       return `
         <section class="hero">
           <div class="hero-copy">
-            <span class="eyebrow">Saudi AI Career Readiness</span>
+            <span class="eyebrow">${this.state.settings.language === "ar" ? "الجاهزية المهنية السعودية بالذكاء الاصطناعي" : "Saudi AI Career Readiness"}</span>
             <h1>${this.state.settings.language === "ar" ? "اعرف مستواك المهني بوضوح، وطوّر فرصك بخطوات عملية" : "Understand your career readiness clearly, then improve it with practical next steps"}</h1>
             <p>${this.state.settings.language === "ar" ? "تمهيد يقرأ السيرة الذاتية، يوضح نقاط القوة والفجوات، ثم يحولها إلى خطة تطوير وفرص أنسب لك." : "Tamheed reads the CV, clarifies strengths and gaps, then turns them into a development path and better-fit opportunities."}</p>
             <div class="hero-bullets">
@@ -2096,7 +3333,7 @@
           </article>
           <article class="info-card feature-card">
             <span class="feature-kicker">02</span>
-            <h3>${this.state.settings.language === "ar" ? "Smart Job Matching" : "Smart Job Matching"}</h3>
+            <h3>${this.state.settings.language === "ar" ? "مطابقة وظائف ذكية" : "Smart Job Matching"}</h3>
             <p>${this.state.settings.language === "ar" ? "مطابقة فورية مع الوظائف وإظهار نسبة التوافق لكل مسار." : "Instant role matching with clear percentages for each path."}</p>
             <div class="simple-list tight-list">
               <span>UI Designer - 70%</span>
@@ -2105,7 +3342,7 @@
           </article>
           <article class="info-card feature-card">
             <span class="feature-kicker">03</span>
-            <h3>${this.state.settings.language === "ar" ? "Skill Gap Analysis" : "Skill Gap Analysis"}</h3>
+            <h3>${this.state.settings.language === "ar" ? "تحليل فجوات المهارات" : "Skill Gap Analysis"}</h3>
             <p>${this.state.settings.language === "ar" ? "معرفة النواقص التي ترفع فرص التوظيف بشكل مباشر." : "See the missing skills that most improve hiring potential."}</p>
             <div class="simple-list tight-list">
               <span>${this.state.settings.language === "ar" ? "جاهز 68% لوظيفة Software Engineer" : "68% ready for Software Engineer"}</span>
@@ -2114,7 +3351,7 @@
           </article>
           <article class="info-card feature-card">
             <span class="feature-kicker">04</span>
-            <h3>${this.state.settings.language === "ar" ? "Micro Labs" : "Micro Labs"}</h3>
+            <h3>${this.state.settings.language === "ar" ? "مختبرات مصغّرة" : "Micro Labs"}</h3>
             <p>${this.state.settings.language === "ar" ? "اختبارات عملية قصيرة لإثبات المهارات بدل الاكتفاء بالادعاء." : "Short practical labs to validate skills instead of relying on claims."}</p>
           </article>
           <article class="info-card feature-card">
@@ -2128,19 +3365,35 @@
             <p>${this.state.settings.language === "ar" ? "ملف رقمي موثوق يتضمن المهارات الموثقة والجاهزية، ومناسب للفعاليات المهنية." : "A trusted digital profile with verified skills and readiness, ready for professional events."}</p>
           </article>
         </section>
-        <section class="section-grid">
-          <article class="info-card">
+        <section class="feature-grid services-grid">
+          <article class="info-card feature-card">
+            <span class="feature-kicker">07</span>
             <h3>${this.state.settings.language === "ar" ? "للمستخدم" : "For candidates"}</h3>
             <p>${this.state.settings.language === "ar" ? "رحلة واضحة ومباشرة: افهم مستواك، طوّر الفجوات، ثم أثبت المهارة." : "A direct journey: understand your level, close gaps, then validate skills."}</p>
           </article>
-          <article class="info-card">
+          <article class="info-card feature-card">
+            <span class="feature-kicker">08</span>
             <h3>${this.state.settings.language === "ar" ? "لأقسام الموارد البشرية" : "For HR teams"}</h3>
             <p>${this.state.settings.language === "ar" ? "ترتيب أوضح للمرشحين بناءً على الجاهزية والمهارات الموثقة." : "A clearer ranking based on readiness and verified skills."}</p>
           </article>
-          <article class="info-card">
+          <article class="info-card feature-card">
+            <span class="feature-kicker">09</span>
             <h3>${this.state.settings.language === "ar" ? "متوافق مع رؤية 2030" : "Aligned with Vision 2030"}</h3>
             <p>${this.state.settings.language === "ar" ? "رفع قابلية التوظيف، تسريع المواءمة بين التعليم وسوق العمل، وتمكين المواهب الرقمية الوطنية." : "Improving employability, tightening education-to-market alignment, and enabling local digital talent."}</p>
           </article>
+        </section>
+        <section class="landing-footer-panel glass">
+          <div class="landing-footer-head">
+            <h3>${this.state.settings.language === "ar" ? "كل ما تحتاجه لتطوير مستقبلك في منصة واحدة" : "Everything you need to develop your future in one platform"}</h3>
+          </div>
+          <div class="landing-image-grid">
+            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 1" : "Image 1"}</div>
+            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 2" : "Image 2"}</div>
+            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 3" : "Image 3"}</div>
+            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 4" : "Image 4"}</div>
+            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 5" : "Image 5"}</div>
+            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 6" : "Image 6"}</div>
+          </div>
         </section>
       `;
     }
@@ -2206,30 +3459,11 @@
       `;
     }
 
-    microLabsTestPage() {
+   microLabsTestPage() {
       return `
-        <section class="page-head">
-          <h1>Micro Labs Test</h1>
-        </section>
-        <section class="blank-white-page"></section>
-      `;
-    }
-
-    futureSoftSkillsCardMarkup() {
-      return `
-        <article class="info-card interview-panel future-softskills-card">
-          <h3>${this.state.settings.language === "ar" ? "تطوير Soft Skills بالكاميرا والصوت" : "Soft Skills Development with Camera & Voice"}</h3>
-          <p>${this.state.settings.language === "ar" ? "تحليل ذكي لسلوكك أثناء التحدث ليعطيك ملاحظات مباشرة وقابلة للتحسين." : "An intelligent speaking-behavior analysis flow with direct, actionable feedback."}</p>
-          <div class="simple-list">
-            <span>${this.state.settings.language === "ar" ? "تحليل نبرة الصوت أثناء الإجابة" : "Voice tone analysis during responses"}</span>
-            <span>${this.state.settings.language === "ar" ? "قراءة لغة الجسد والثقة أثناء الكلام" : "Body language and confidence tracking while speaking"}</span>
-            <span>${this.state.settings.language === "ar" ? "مراقبة حركة العين والانتباه أثناء العرض" : "Eye movement and attention tracking during delivery"}</span>
-            <span>${this.state.settings.language === "ar" ? "تحسينات مباشرة بعد كل محاولة" : "Immediate improvement suggestions after each attempt"}</span>
-          </div>
-          <div class="actions-row compact-actions">
-            <button class="btn btn-ghost" type="button" disabled>${this.state.settings.language === "ar" ? "قريباً" : "Coming soon"}</button>
-          </div>
-        </article>
+        <div style="width: 100%; height: calc(100vh - 80px); border-radius: 16px; overflow: hidden; background: transparent; display: flex; flex-direction: column;">
+            <iframe src="microlab.html" style="width: 100%; height: 100%; border: none; flex: 1;" title="Tamheed Microlab"></iframe>
+        </div>
       `;
     }
 
@@ -2500,19 +3734,22 @@
       const progress = this.currentProgress();
       const analysis = progress ? progress.cvAnalysis : null;
       const cvData = user && user.cvAnalysis ? user.cvAnalysis : null;
+      const fitScore = cvData && cvData.aiInsights && Number.isFinite(cvData.aiInsights.job_fit_score)
+        ? cvData.aiInsights.job_fit_score
+        : (cvData && cvData.scores && Number.isFinite(cvData.scores.TotalScore) ? cvData.scores.TotalScore : null);
+      const fitTone = fitScore === null ? "" : (fitScore >= 70 ? "good" : (fitScore >= 50 ? "warn" : "risk"));
       return `
         <section class="page-head">
           <h1>${this.t("uploadCv")}</h1>
-          <p>${this.state.settings.language === "ar" ? "ارفع ملف PDF لتحليل السيرة محلياً داخل المتصفح." : "Upload a PDF to analyze the CV locally in the browser."}</p>
+          <p>${this.state.settings.language === "ar" ? "ارفع ملف PDF لتحليل السيرة الذاتية." : "Upload a PDF to analyze your CV."}</p>
         </section>
         <section class="cards upload-layout">
           <article class="dropzone upload-dropzone-card ${this.state.cvUploadPending ? "loading" : ""}">
-            <div class="hero-summary-head">
-              <span class="hero-summary-label">${this.state.settings.language === "ar" ? "رفع وتحليل" : "Upload & analyze"}</span>
-              <h3>${this.state.settings.language === "ar" ? "ابدأ من ملفك الحالي" : "Start from your current CV"}</h3>
-              <p>${this.state.settings.language === "ar" ? "اختيار ملف واحد يكفي لبدء التحليل المحلي مباشرة." : "A single file is enough to start local analysis immediately."}</p>
-            </div>
-            <div class="dropzone-inner upload-dropzone-inner">
+            <div class="dropzone-inner upload-dropzone-inner upload-dropzone-inner-compact">
+              <div class="upload-card-head">
+                <span class="hero-summary-label">${this.state.settings.language === "ar" ? "الخطوة 1" : "Step 1"}</span>
+                <h3>${this.state.settings.language === "ar" ? "رفع ملف السيرة" : "Upload CV PDF"}</h3>
+              </div>
               <div class="upload-file-pill">
                 <strong>${this.state.settings.language === "ar" ? "اختر ملف PDF من جهازك" : "Choose a PDF from your device"}</strong>
                 <small>PDF</small>
@@ -2524,11 +3761,26 @@
           </article>
           <article class="info-card upload-results-card">
             <div class="hero-summary-head">
-              <span class="hero-summary-label">${this.state.settings.language === "ar" ? "نتائج سريعة" : "Quick results"}</span>
-              <h3>${this.state.settings.language === "ar" ? "مخرجات التحليل" : "Analysis output"}</h3>
-              <p>${this.state.settings.language === "ar" ? "هنا يظهر ما استخرجه النظام مباشرة من السيرة بعد القراءة." : "The extracted insights appear here immediately after parsing."}</p>
+              <div class="upload-results-head-row">
+                <div>
+                  <span class="hero-summary-label">${this.state.settings.language === "ar" ? "الخطوة 2" : "Step 2"}</span>
+                  <h3>${this.state.settings.language === "ar" ? "نتائج التحليل" : "Analysis Results"}</h3>
+                </div>
+                ${fitScore !== null ? `<span class="upload-fit-pill ${fitTone}">${this.state.settings.language === "ar" ? "الجاهزية" : "Readiness"} ${fitScore}%</span>` : ""}
+              </div>
+              <p>${this.state.settings.language === "ar" ? "هنا تظهر نقاط القوة، الفجوات، والخطوات العملية المقترحة." : "Strengths, gaps, and practical next steps appear here."}</p>
             </div>
-            ${this.state.cvUploadPending ? `<div class="ai-loader upload-ai-loader"><span></span><span></span><span></span></div>` : cvData ? `
+            ${this.state.cvUploadPending ? `
+              <div class="upload-skeleton">
+                <span class="upload-skeleton-line w-90"></span>
+                <span class="upload-skeleton-line w-70"></span>
+                <div class="upload-skeleton-grid">
+                  <span class="upload-skeleton-card"></span>
+                  <span class="upload-skeleton-card"></span>
+                </div>
+                <span class="upload-skeleton-line w-95"></span>
+              </div>
+            ` : cvData ? `
               ${this.buildCvSummaryMarkup(cvData)}
             ` : analysis ? `
               <div class="stack upload-results-stack">
@@ -2543,17 +3795,22 @@
       `;
     }
 
-    jobsPage() {
-      const user = this.currentUser();
-      const progress = this.currentProgress();
-      const matches = this.getFilteredMatches(user);
-      const topMatch = matches[0] || null;
-      const strongMatches = matches.filter((item) => item.match >= 70).length;
-      return `
-        <section class="page-head">
-          <h1>${this.state.settings.language === "ar" ? "المطابقة الذكية للوظائف" : "Smart Job Matching"}</h1>
-          <p>${this.state.settings.language === "ar" ? "فلتر النتائج حسب المدينة، نوع الدور، المهارة، ونسبة المطابقة." : "Filter by city, role type, skill, and match percentage."}</p>
-        </section>
+      jobsPage() {
+        const user = this.currentUser();
+        const progress = this.currentProgress();
+        const matches = this.getFilteredMatches(user);
+        const sortedMatches = [...matches].sort((a, b) => b.match - a.match);
+        const isSaraDemo = this.isSaraDemoUser(user);
+        const topMatch = sortedMatches[0] || null;
+        const strongMatches = sortedMatches.filter((item) => item.match >= 70).length;
+        const needsCv = !progress || !progress.cvUploaded;
+        return `
+          <section class="page-head">
+            <h1>${this.state.settings.language === "ar" ? "المطابقة الذكية للوظائف" : "Smart Job Matching"}</h1>
+            <p>${this.state.settings.language === "ar" ? "فلتر النتائج حسب المدينة، نوع الدور، المهارة، ونسبة المطابقة." : "Filter by city, role type, skill, and match percentage."}</p>
+            ${this.state.realJobs && this.state.realJobs.length > 0 ? `<div style="margin-top: 12px; padding: 8px 12px; background: rgba(76, 175, 80, 0.1); border-left: 4px solid #4caf50; border-radius: 4px; font-size: 0.9em;"><strong>✓ ${this.state.settings.language === "ar" ? "وظائف LinkedIn" : "LinkedIn Jobs Loaded"}</strong> - ${this.state.realJobs.length} ${this.state.settings.language === "ar" ? "وظيفة من LinkedIn" : "positions from LinkedIn"}</div>` : this.state.jobsLoading ? `<div style="margin-top: 12px; padding: 8px 12px; background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107; border-radius: 4px; font-size: 0.9em;"><strong>⏳ ${this.state.settings.language === "ar" ? "جاري التحميل" : "Loading"}</strong> - ${this.state.settings.language === "ar" ? "جاري تحميل وظائف LinkedIn..." : "Loading LinkedIn jobs..."}</div>` : ""}
+            ${needsCv ? `<div style="margin-top: 10px; padding: 10px 12px; background: rgba(244, 67, 54, 0.08); border-left: 4px solid #f44336; border-radius: 8px; font-size: 0.92em;">${this.state.settings.language === "ar" ? "حمّل سيرتك أولاً لتتمكن من التقديم." : "Upload your CV first to apply for jobs."}</div>` : ""}
+          </section>
         <div class="jobs-page-stack">
           <section class="cards jobs-section">
             <article class="info-card jobs-filter-card">
@@ -2608,45 +3865,49 @@
               </div>
             </article>
           </section>
-          <section class="cards jobs-match-grid jobs-section">
-            ${matches.length ? matches.map((item) => `
-              <article class="job-card jobs-match-card">
-                <div class="job-card-head">
-                  <div>
-                    <h3>${this.jobTitle(item.job)}</h3>
+          <section class="cards jobs-match-grid jobs-match-list jobs-section">
+              ${sortedMatches.length ? sortedMatches.map((item) => `
+                <article class="job-card jobs-match-card">
+                  <div class="job-card-head">
+                    <div>
+                      <h3>${this.jobTitle(item.job)}</h3>
                     <p>${item.job.company} · ${item.job.city}</p>
                   </div>
-                  <span class="score-pill">${item.match}%</span>
+                  <div class="jobs-score-stack">
+                    <span class="score-pill">${item.match}%</span>
+                    <span class="jobs-trend ${item.match >= 70 ? "up" : "down"}">${item.match >= 70 ? "▲" : "▼"} ${item.match >= 70 ? (this.state.settings.language === "ar" ? "ممتاز" : "Strong") : (this.state.settings.language === "ar" ? "أقل" : "Lower")}</span>
+                  </div>
                 </div>
                 <p>${this.state.settings.language === "ar" ? item.job.descriptionAr : item.job.descriptionEn}</p>
                 <div class="chip-row">${item.job.skills.map((skill) => `<span class="chip">${skill}</span>`).join("")}</div>
                 <div class="job-meta">
                   <span>${item.job.salary}</span>
                   <span>${item.job.type}</span>
-                </div>
-                <div class="actions-row">
-                  <button class="btn btn-ghost" data-nav="/job/${item.job.id}">${this.state.settings.language === "ar" ? "التفاصيل" : "Details"}</button>
-                  <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}">${progress.appliedJobs.includes(item.job.id) ? (this.state.settings.language === "ar" ? "تم التقديم" : "Applied") : this.t("apply")}</button>
-                </div>
-              </article>
-            `).join("") : `<article class="info-card"><p class="muted">${this.state.settings.language === "ar" ? "لا توجد نتائج مطابقة للفلترة الحالية." : "No jobs match the current filters."}</p></article>`}
-          </section>
+                  </div>
+                  <div class="actions-row">
+                    <button class="btn btn-ghost" data-nav="/job/${item.job.id}">${this.state.settings.language === "ar" ? "التفاصيل" : "Details"}</button>
+                    <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}" ${needsCv ? "disabled" : ""}>${progress.appliedJobs.includes(item.job.id) ? (this.state.settings.language === "ar" ? "تم التقديم" : "Applied") : needsCv ? (this.state.settings.language === "ar" ? "حمّل سيرتك" : "Upload CV") : this.t("apply")}</button>
+                  </div>
+                </article>
+              `).join("") : `<article class="info-card"><p class="muted">${isSaraDemo ? (this.state.settings.language === "ar" ? "لا توجد نتائج مطابقة للفلترة الحالية." : "No jobs match the current filters.") : (this.state.jobsLoading ? (this.state.settings.language === "ar" ? "جاري تحميل وظائف LinkedIn..." : "Loading LinkedIn jobs...") : (this.state.settings.language === "ar" ? "لا توجد وظائف LinkedIn متاحة حالياً." : "No LinkedIn jobs available right now."))}</p></article>`}
+            </section>
         </div>
       `;
     }
 
-    jobDetailsPage(jobId) {
-      const user = this.currentUser();
-      const progress = this.currentProgress();
-      const item = this.getMatchesForUser(user).find((entry) => entry.job.id === jobId);
-      if (!item) {
-        return `<section class="info-card"><p class="muted">${this.state.settings.language === "ar" ? "الوظيفة غير موجودة." : "Job not found."}</p></section>`;
-      }
-      const userSkills = (user.topSkills || []).map((skill) => skill.toLowerCase());
-      const matchedCount = item.matchedSkills.length;
-      const missingCount = item.missingSkills.length;
-      const totalRequired = Math.max(item.job.skills.length, 1);
-      const readinessLift = Math.min(18, missingCount * 4);
+      jobDetailsPage(jobId) {
+        const user = this.currentUser();
+        const progress = this.currentProgress();
+        const item = this.getMatchesForUser(user).find((entry) => entry.job.id === jobId);
+        if (!item) {
+          return `<section class="info-card"><p class="muted">${this.state.settings.language === "ar" ? "الوظيفة غير موجودة." : "Job not found."}</p></section>`;
+        }
+        const needsCv = !progress || !progress.cvUploaded;
+        const userSkills = (user.topSkills || []).map((skill) => skill.toLowerCase());
+        const matchedCount = item.matchedSkills.length;
+        const missingCount = item.missingSkills.length;
+        const totalRequired = Math.max(item.job.skills.length, 1);
+        const readinessLift = Math.min(18, missingCount * 4);
       const fitStatus = item.match >= 75
         ? (this.state.settings.language === "ar" ? "مطابقة قوية" : "Strong fit")
         : item.match >= 55
@@ -2666,7 +3927,7 @@
                 ? "هذا العرض يوضح أين تتقاطع مهاراتك الحالية مع متطلبات الوظيفة، وما الذي ينقصك للوصول إلى توافق أعلى."
                 : "This view shows where your current skills intersect with the job requirements and what is still missing for a stronger fit."}</p>
               <div class="actions-row compact-actions">
-                <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}">${progress.appliedJobs.includes(item.job.id) ? (this.state.settings.language === "ar" ? "تم التقديم" : "Applied") : this.t("apply")}</button>
+                <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}" ${needsCv ? "disabled" : ""}>${progress.appliedJobs.includes(item.job.id) ? (this.state.settings.language === "ar" ? "تم التقديم" : "Applied") : needsCv ? (this.state.settings.language === "ar" ? "حمّل سيرتك" : "Upload CV") : this.t("apply")}</button>
                 <button class="btn btn-ghost" data-nav="/plan">${this.state.settings.language === "ar" ? "مسار تعلّم مقترح" : "Recommended learning path"}</button>
               </div>
             </div>
@@ -2678,6 +3939,26 @@
             </div>
           </article>
           <section class="job-analysis-grid">
+            <!-- CV upload area: allow student to upload CV while viewing job details -->
+            <article class="info-card">
+              <h3>${this.state.settings.language === "ar" ? "ارفاق السيرة" : "Attach your CV"}</h3>
+              <p class="muted">${this.state.settings.language === "ar" ? "ارفع سيرتك لتُخزن في حسابك ويمكنك التقديم بسهولة." : "Upload your CV and save it to your account so applying is easier."}</p>
+              <div class="stack">
+                <input id="jobCvInput-${item.job.id}" type="file" accept="application/pdf" />
+                <div class="actions-row">
+                  <button class="btn btn-primary" data-action="upload-cv-job" data-job-id="${item.job.id}">${this.state.settings.language === "ar" ? "ارفع وحفظ" : "Upload & Save"}</button>
+                </div>
+                ${this.state.jobCvStatusMessage ? `<p class="muted">${this.state.jobCvStatusMessage}</p>` : ""}
+              </div>
+            </article>
+
+            ${needsCv ? `
+              <article class="info-card" style="border-left: 4px solid #f44336;">
+                <p class="muted"><strong>${this.state.settings.language === "ar" ? "حمّل سيرتك" : "Upload your CV"}</strong></p>
+                <p class="muted">${this.state.settings.language === "ar" ? "ارفع ملف PDF مرة واحدة ليكون جاهزاً لكل طلبات التقديم." : "Upload one PDF once; it will be used for all job applications."}</p>
+              </article>
+            ` : ""}
+
             <article class="info-card job-analysis-card">
               <div class="dashboard-section-head">
                 <div>
@@ -2764,11 +4045,12 @@
       const gaps = this.getSkillGaps(user);
       const progress = this.currentProgress();
       const focusGap = gaps[0];
+      const targetRole = this.getProfileTargetRole(user);
       const learningSuggestions = this.getLearningSuggestions(focusGap ? focusGap.skill : "");
       return `
         <section class="page-head">
           <h1>${this.state.settings.language === "ar" ? "خطة التطوير" : "Development Plan"}</h1>
-          <p>${this.state.settings.language === "ar" ? "كل مهمة مكتملة تزيد الجاهزية حتى 10 نقاط." : "Each completed task contributes up to 10 readiness points."}</p>
+          <p>${this.state.settings.language === "ar" ? `الخطة مبنية على الدور المستهدف: ${targetRole}` : `Plan generated for your target role: ${targetRole}`}</p>
         </section>
         <section class="cards two-up plan-layout">
           <article class="info-card gap-analysis-card">
@@ -2782,7 +4064,7 @@
               <div class="gap-learning-list">
                 ${learningSuggestions.map((entry) => `
                   <div class="gap-learning-item">
-                    <strong>${this.state.settings.language === "ar" ? entry.sourceAr : entry.sourceEn}</strong>
+                    <strong><a href="${entry.url || "#"}" target="_blank" rel="noopener noreferrer">${this.state.settings.language === "ar" ? entry.sourceAr : entry.sourceEn}</a></strong>
                     <small>${this.state.settings.language === "ar" ? entry.noteAr : entry.noteEn}</small>
                   </div>
                 `).join("")}
@@ -2828,120 +4110,401 @@
     }
 
     behaviorPage() {
+      const user = this.currentUser();
       const progress = this.currentProgress();
-      const scenarios = this.getBehaviorScenarios();
-      const scenario = scenarios[this.state.behaviorScenarioIndex] || scenarios[0];
-      if (!scenario) {
-        return `<section class="info-card"><p class="muted">${this.state.settings.language === "ar" ? "لا توجد سيناريوهات متاحة الآن." : "No behavior scenarios available right now."}</p></section>`;
+      
+      // If test is active, show assessment
+      if (this.state.behavioralTestActive && this.state.behavioralQuestions) {
+        return this.behaviorTestPage();
       }
-      const scores = progress.behavior.scores;
+
+      // If test is completed, show results
+      if (this.state.behavioralResultReady || (progress.behavior && progress.behavior.completed)) {
+        return this.behaviorResultsPage();
+      }
+
+      // Show intro and start button
+      const desiredRole = user.desiredRole || user.targetRoleEn || "Your Target Role";
+      
       return `
         <section class="page-head">
-          <h1>${this.state.settings.language === "ar" ? "محاكاة سلوكية" : "Behavioral Simulation"}</h1>
-          <p>${this.state.settings.language === "ar" ? "يتم تقييم التواصل والتعاطف وحل المشكلات." : "Communication, empathy, and problem solving are scored."}</p>
+          <h1>${this.state.settings.language === "ar" ? "محاكاة سلوكية ذكية" : "AI Behavioral Simulation"}</h1>
+          <p>${this.state.settings.language === "ar" ? "اختبر قدرتك على اتخاذ القرارات في سيناريوهات واقعية للعمل." : "Test your decision-making in realistic job scenarios."}</p>
         </section>
-        <section class="cards behavior-layout">
-          <article class="info-card behavior-scenario-card">
-            <div class="hero-summary-head behavior-head-row">
+        <section class="cards behavior-intro-layout">
+          <article class="profile-card-premium behavior-intro-card">
+            <div class="smart-profile-head">
               <div>
-                <span class="hero-summary-label">${this.state.settings.language === "ar" ? `السيناريو ${this.state.behaviorScenarioIndex + 1} من ${scenarios.length}` : `Scenario ${this.state.behaviorScenarioIndex + 1} of ${scenarios.length}`}</span>
-                <h3>${this.state.settings.language === "ar" ? scenario.titleAr : scenario.titleEn}</h3>
-                <p>${this.state.settings.language === "ar" ? scenario.descriptionAr : scenario.descriptionEn}</p>
+                <span class="hero-summary-label">${this.state.settings.language === "ar" ? "اختبار سلوكي" : "Behavioral Assessment"}</span>
+                <h3>${this.state.settings.language === "ar" ? "محاكاة حقيقية" : "Realistic Scenarios"}</h3>
+                <p>${this.state.settings.language === "ar" ? "ستواجه 5 سيناريوهات واقعية تختبر قدراتك في الاتصال وحل المشاكل والتعاطف، مخصصة لدورة:" : "You'll face 5 realistic scenarios testing communication, problem-solving, and empathy, tailored for:"}</p>
               </div>
-              <div class="behavior-head-actions">
-                <button class="behavior-icon-btn" type="button" data-action="reset-behavior" aria-label="${this.state.settings.language === "ar" ? "إعادة السؤال" : "Repeat question"}" title="${this.state.settings.language === "ar" ? "إعادة السؤال" : "Repeat question"}">↺</button>
-                <button class="behavior-icon-btn" type="button" data-action="next-behavior-scenario" aria-label="${this.state.settings.language === "ar" ? "تغيير السؤال" : "Change scenario"}" title="${this.state.settings.language === "ar" ? "تغيير السؤال" : "Change scenario"}">⇆</button>
+              <div class="behavior-role-badge">
+                <strong>${desiredRole}</strong>
               </div>
             </div>
-            <div class="option-list behavior-option-list">
-              ${scenario.options.map((option) => `
-                <label class="option-card behavior-option-card">
-                  <input type="radio" name="behavior-answer" value="${option.id}" ${progress.behavior.completed ? "disabled" : ""} ${this.state.behaviorDraftAnswer === option.id ? "checked" : ""}>
+            
+            <div class="behavior-intro-section">
+              <h4>${this.state.settings.language === "ar" ? "ما يتم تقييمه:" : "What's evaluated:"}</h4>
+              <ul class="simple-list">
+                <li><strong>${this.state.settings.language === "ar" ? "التواصل:" : "Communication:"}</strong> ${this.state.settings.language === "ar" ? "كيفية شرحك للأفكار والتعامل مع الفريق." : "How you explain ideas and handle teams."}</li>
+                <li><strong>${this.state.settings.language === "ar" ? "حل المشاكل:" : "Problem-solving:"}</strong> ${this.state.settings.language === "ar" ? "كيفية التعامل مع التحديات الحقيقية." : "How you handle real challenges."}</li>
+                <li><strong>${this.state.settings.language === "ar" ? "التعاطف:" : "Empathy:"}</strong> ${this.state.settings.language === "ar" ? "فهمك لاحتياجات الآخرين والعملاء." : "Understanding others' needs and customer impact."}</li>
+                <li><strong>${this.state.settings.language === "ar" ? "المسؤولية:" : "Accountability:"}</strong> ${this.state.settings.language === "ar" ? "كيفية تحملك المسؤولية عن الأخطاء." : "How you own your mistakes."}</li>
+              </ul>
+            </div>
+
+            <div class="behavior-intro-section">
+              <h4>${this.state.settings.language === "ar" ? "الوقت:" : "Time:"}</h4>
+              <p>~${(5 * 120) / 60} ${this.state.settings.language === "ar" ? "دقيقة (120 ثانية لكل سؤال)" : "minutes (120 seconds per question)"}</p>
+            </div>
+
+            ${this.state.behavioralLoading ? `
+              <div class="loading-spinner">
+                <span>${this.state.settings.language === "ar" ? "جارٍ تحميل الأسئلة الذكية..." : "Loading smart questions..."}</span>
+              </div>
+              <button class="btn btn-primary" disabled>${this.state.settings.language === "ar" ? "جارٍ التحميل..." : "Loading..."}</button>
+            ` : `
+              <button class="btn btn-primary btn-large" data-action="start-behavioral-test">
+                ${this.state.settings.language === "ar" ? "ابدأ الاختبار" : "Start Assessment"}
+              </button>
+            `}
+          </article>
+
+          <article class="info-card behavior-tips-card">
+            <div class="hero-summary-head">
+              <span class="hero-summary-label">${this.state.settings.language === "ar" ? "نصائح" : "Tips"}</span>
+              <h3>${this.state.settings.language === "ar" ? "كيفية النجاح" : "How to succeed"}</h3>
+            </div>
+            <div class="behavior-tips-list">
+              <div class="tip-item">
+                <strong>✓ ${this.state.settings.language === "ar" ? "كن محدداً:" : "Be specific:"}</strong>
+                <p>${this.state.settings.language === "ar" ? "استخدم أمثلة حقيقية وقابلة للقياس من تجربتك." : "Use concrete, measurable examples from your experience."}</p>
+              </div>
+              <div class="tip-item">
+                <strong>✓ ${this.state.settings.language === "ar" ? "ركز على التأثير:" : "Show impact:"}</strong>
+                <p>${this.state.settings.language === "ar" ? "اشرح النتيجة النهائية والفائدة للفريق أو العميل." : "Explain the outcome and benefit to team or customer."}</p>
+              </div>
+              <div class="tip-item">
+                <strong>✓ ${this.state.settings.language === "ar" ? "اعترف بالأخطاء:" : "Own mistakes:"}</strong>
+                <p>${this.state.settings.language === "ar" ? "أظهر المسؤولية والقدرة على التعلم من الأخطاء." : "Show ownership and ability to learn from mistakes."}</p>
+              </div>
+              <div class="tip-item">
+                <strong>✓ ${this.state.settings.language === "ar" ? "تعامل مع الناس:" : "Handle people:"}</strong>
+                <p>${this.state.settings.language === "ar" ? "أظهر التعاطف والتواصل الواضح في كل سيناريو." : "Demonstrate empathy and clear communication."}</p>
+              </div>
+            </div>
+          </article>
+        </section>
+      `;
+    }
+
+    behaviorTestPage() {
+      const user = this.currentUser();
+      if (!user || !this.state.behavioralQuestions || this.state.behavioralQuestions.length === 0) {
+        return `<section class="info-card"><p>${this.state.settings.language === "ar" ? "خطأ في تحميل الأسئلة." : "Error loading questions."}</p></section>`;
+      }
+
+      const questions = this.state.behavioralQuestions;
+      const currentIdx = this.state.behavioralCurrentQuestion;
+      const question = questions[currentIdx];
+
+      if (!question) {
+        return `<section class="info-card"><p>${this.state.settings.language === "ar" ? "خطأ: السؤال غير موجود." : "Error: Question not found."}</p></section>`;
+      }
+
+      const currentAnswer = this.state.behavioralAnswers[question.id];
+
+      return `
+        <section class="page-head">
+          <h1>${this.state.settings.language === "ar" ? "اختبار سلوكي" : "Behavioral Test"}</h1>
+          <p>${this.state.settings.language === "ar" ? `السؤال ${currentIdx + 1} من ${questions.length}` : `Question ${currentIdx + 1} of ${questions.length}`}</p>
+          ${this.state.behavioralRole ? `<p class="muted">${this.state.settings.language === "ar" ? "اختبار لدور: " : "Assessment for: "}${this.state.behavioralRole}</p>` : ""}
+        </section>
+
+        <section class="cards behavior-test-layout">
+          <div class="behavior-progress-bar">
+            <div class="progress-fill" style="width: ${((currentIdx + 1) / questions.length) * 100}%"></div>
+          </div>
+
+          <article class="profile-card-premium behavior-scenario-card">
+            <div class="hero-summary-head">
+              <div>
+                <span class="hero-summary-label">${this.state.settings.language === "ar" ? "السيناريو" : "Scenario"}</span>
+                <h3>${question.scenario}</h3>
+              </div>
+              <div class="behavior-timer">
+                <span class="timer-display">${this.formatTime(this.state.behavioralTimer)}</span>
+              </div>
+            </div>
+
+            <div class="behavior-question-text">
+              <h4>${this.state.settings.language === "ar" ? question.questionAr : question.questionEn}</h4>
+            </div>
+
+            <div class="option-list behavior-test-options">
+              ${question.options.map((option) => `
+                <label class="option-card behavior-test-option ${currentAnswer === option.id ? "selected" : ""}">
+                  <input type="radio" name="behavior-answer" value="${option.id}" 
+                    ${currentAnswer === option.id ? "checked" : ""}
+                    data-action="record-behavioral-answer|${question.id}|${option.id}">
                   <span>${this.state.settings.language === "ar" ? option.textAr : option.textEn}</span>
                 </label>
               `).join("")}
             </div>
-            <button class="btn btn-primary" data-action="submit-behavior" ${progress.behavior.completed ? "disabled" : ""}>${this.state.settings.language === "ar" ? "تحليل الرد" : "Analyze response"}</button>
-          </article>
-          <article class="info-card behavior-feedback-card">
-            <div class="hero-summary-head">
-              <span class="hero-summary-label">${this.state.settings.language === "ar" ? "قراءة سريعة" : "Quick read"}</span>
-              <h3>${this.state.settings.language === "ar" ? "تغذية راجعة AI" : "AI feedback"}</h3>
-              <p>${this.state.settings.language === "ar" ? "قراءة مرتبة لمدى توازنك في الرد الأول." : "A cleaner view of how balanced your first response is."}</p>
+
+            <div class="behavior-test-actions">
+              <button type="button" class="btn btn-ghost" data-action="prev-behavioral-question" ${currentIdx === 0 ? "disabled" : ""}>
+                ${this.state.settings.language === "ar" ? "← السابق" : "← Previous"}
+              </button>
+              
+              ${currentIdx < questions.length - 1 ? `
+                <button type="button" class="btn btn-primary" data-action="next-behavioral-question" onclick="window.tamheedApp && window.tamheedApp.nextBehavioralQuestion(); return false;" onpointerup="window.tamheedApp && window.tamheedApp.nextBehavioralQuestion(); return false;" ontouchend="window.tamheedApp && window.tamheedApp.nextBehavioralQuestion(); return false;" onmouseup="window.tamheedApp && window.tamheedApp.nextBehavioralQuestion(); return false;">
+                  ${this.state.settings.language === "ar" ? "التالي →" : "Next →"}
+                </button>
+              ` : `
+                <button type="button" class="btn btn-success" data-action="complete-behavioral-test" onclick="window.tamheedApp && window.tamheedApp.completeBehavioralTest({ allowUnanswered: true }); return false;" onpointerup="window.tamheedApp && window.tamheedApp.completeBehavioralTest({ allowUnanswered: true }); return false;" ontouchend="window.tamheedApp && window.tamheedApp.completeBehavioralTest({ allowUnanswered: true }); return false;" onmouseup="window.tamheedApp && window.tamheedApp.completeBehavioralTest({ allowUnanswered: true }); return false;">
+                  ${this.state.settings.language === "ar" ? "إنهاء الاختبار" : "Finish Test"}
+                </button>
+              `}
             </div>
-            ${scores ? `
-              <div class="score-stack behavior-score-stack">
-                <div class="list-row behavior-score-row"><span>${this.state.settings.language === "ar" ? "التواصل" : "Communication"}</span><strong>${scores.communication}/5</strong></div>
-                <div class="list-row behavior-score-row"><span>${this.state.settings.language === "ar" ? "التعاطف" : "Empathy"}</span><strong>${scores.empathy}/5</strong></div>
-                <div class="list-row behavior-score-row"><span>${this.state.settings.language === "ar" ? "حل المشكلات" : "Problem solving"}</span><strong>${scores.problem}/5</strong></div>
+          </article>
+
+          <aside class="info-card behavior-test-guide">
+            <div class="hero-summary-head">
+              <span class="hero-summary-label">${this.state.settings.language === "ar" ? "المهارات المختبرة" : "Skills tested"}</span>
+            </div>
+            <div class="skills-badges">
+              ${(question.skillsTested || []).map((skill) => `
+                <span class="chip">${skill.replace(/_/g, " ")}</span>
+              `).join("")}
+            </div>
+            <div class="guide-section">
+              <h4>${this.state.settings.language === "ar" ? "التعليمات:" : "Instructions:"}</h4>
+              <ul class="simple-list">
+                <li>${this.state.settings.language === "ar" ? "اقرأ السيناريو بعناية." : "Read the scenario carefully."}</li>
+                <li>${this.state.settings.language === "ar" ? "فكر قبل الإجابة." : "Think before answering."}</li>
+                <li>${this.state.settings.language === "ar" ? "اختر الخيار الأفضل برأيك." : "Choose your best response."}</li>
+                <li>${this.state.settings.language === "ar" ? "لا توجد إجابة واحدة صحيحة." : "There's no single 'right' answer."}</li>
+                <li>${this.state.settings.language === "ar" ? "ستُقيّم خياراتك على أساس الحكم والأخلاقيات." : "You're scored on judgment and ethics."}</li>
+              </ul>
+            </div>
+          </aside>
+        </section>
+      `;
+    }
+
+    behaviorResultsPage() {
+      const user = this.currentUser();
+      const progress = this.currentProgress();
+      const scores = this.state.behavioralLatestScores || progress.behavior?.scores || { communication: 0, empathy: 0, problem_solving: 0, overall: 0 };
+      const roleLabel = this.state.behavioralRole || progress.behavior?.desiredRole || user?.desiredRole || user?.targetRoleEn || "";
+      
+      console.log("behaviorResultsPage rendered, scores:", scores);
+      console.log("progress.behavior:", progress.behavior);
+
+      const getScoreLevel = (score) => {
+        if (score >= 85) return this.state.settings.language === "ar" ? "ممتاز" : "Excellent";
+        if (score >= 70) return this.state.settings.language === "ar" ? "جيد جداً" : "Very good";
+        if (score >= 55) return this.state.settings.language === "ar" ? "جيد" : "Good";
+        return this.state.settings.language === "ar" ? "متوسط" : "Average";
+      };
+
+      const getScoreColor = (score) => {
+        if (score >= 85) return "#4caf50";
+        if (score >= 70) return "#2196f3";
+        if (score >= 55) return "#ff9800";
+        return "#f44336";
+      };
+
+      return `
+        <section class="page-head">
+          <h1>${this.state.settings.language === "ar" ? "نتائج الاختبار السلوكي" : "Behavioral Assessment Results"}</h1>
+          <p>${this.state.settings.language === "ar" ? "تحليل شامل لأدائك السلوكي" : "Comprehensive analysis of your behavioral performance"}</p>
+          ${roleLabel ? `<p class="muted">${this.state.settings.language === "ar" ? "الدور المستهدف: " : "Target role: "}${roleLabel}</p>` : ""}
+        </section>
+
+        <section class="cards behavior-results-layout">
+          <article class="profile-card-premium behavior-overall-card">
+            <div class="smart-profile-head">
+              <div>
+                <span class="hero-summary-label">${this.state.settings.language === "ar" ? "النتيجة الإجمالية" : "Overall Score"}</span>
+                <h3>${getScoreLevel(scores.overall)}</h3>
               </div>
-            ` : `<p class="muted">${this.state.settings.language === "ar" ? "اختر رداً لعرض التحليل." : "Choose a response to see the analysis."}</p>`}
+              <div class="smart-profile-score">
+                <div class="ring" style="--value:${Math.min(scores.overall, 100)}">
+                  <span>${scores.overall}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="behavior-score-details">
+              <div class="score-item">
+                <span>${this.state.settings.language === "ar" ? "التواصل والتعبير" : "Communication"}</span>
+                <div class="score-bar">
+                  <div class="score-fill" style="width: ${Math.min(scores.communication, 100)}%; background: ${getScoreColor(scores.communication)}"></div>
+                </div>
+                <strong>${scores.communication}/100</strong>
+              </div>
+              <div class="score-item">
+                <span>${this.state.settings.language === "ar" ? "حل المشاكل" : "Problem-solving"}</span>
+                <div class="score-bar">
+                  <div class="score-fill" style="width: ${Math.min(scores.problem_solving, 100)}%; background: ${getScoreColor(scores.problem_solving)}"></div>
+                </div>
+                <strong>${scores.problem_solving}/100</strong>
+              </div>
+              <div class="score-item">
+                <span>${this.state.settings.language === "ar" ? "التعاطف والمسؤولية" : "Empathy & Accountability"}</span>
+                <div class="score-bar">
+                  <div class="score-fill" style="width: ${Math.min(scores.empathy, 100)}%; background: ${getScoreColor(scores.empathy)}"></div>
+                </div>
+                <strong>${scores.empathy}/100</strong>
+              </div>
+            </div>
+
+            <button type="button" class="btn btn-ghost" data-action="retake-behavioral-test">
+              ${this.state.settings.language === "ar" ? "إعادة الاختبار" : "Retake Assessment"}
+            </button>
+          </article>
+
+          <article class="info-card behavior-insights-card">
+            <div class="hero-summary-head">
+              <span class="hero-summary-label">${this.state.settings.language === "ar" ? "الرؤى" : "Insights"}</span>
+              <h3>${this.state.settings.language === "ar" ? "نقاط القوة والتطوير" : "Strengths & Development"}</h3>
+            </div>
+
+            <div class="insights-section">
+              <h4>${this.state.settings.language === "ar" ? "نقاط القوة:" : "Strengths:"}</h4>
+              <ul class="simple-list">
+                ${scores.communication >= 75 ? `<li>${this.state.settings.language === "ar" ? "✓ تواصل قوي وواضح" : "✓ Strong, clear communication"}</li>` : ""}
+                ${scores.problem_solving >= 75 ? `<li>${this.state.settings.language === "ar" ? "✓ قدرة قوية على حل المشاكل" : "✓ Strong problem-solving ability"}</li>` : ""}
+                ${scores.empathy >= 75 ? `<li>${this.state.settings.language === "ar" ? "✓ تعاطف قوي مع الآخرين" : "✓ Strong empathy and people skills"}</li>` : ""}
+                ${scores.accountability >= 75 ? `<li>${this.state.settings.language === "ar" ? "✓ المسؤولية والنزاهة" : "✓ Accountability and integrity"}</li>` : ""}
+              </ul>
+            </div>
+
+            <div class="insights-section">
+              <h4>${this.state.settings.language === "ar" ? "مجالات التطوير:" : "Areas to Develop:"}</h4>
+              <ul class="simple-list">
+                ${scores.communication < 75 ? `<li>📈 ${this.state.settings.language === "ar" ? "عزز تواصلك الكتابي والشفهي" : "Improve written and verbal communication"}</li>` : ""}
+                ${scores.problem_solving < 75 ? `<li>📈 ${this.state.settings.language === "ar" ? "طور مهارات حل المشاكل" : "Strengthen problem-solving approach"}</li>` : ""}
+                ${scores.empathy < 75 ? `<li>📈 ${this.state.settings.language === "ar" ? "اعمل على فهم احتياجات الآخرين" : "Work on understanding others' perspectives"}</li>` : ""}
+                ${scores.accountability < 75 ? `<li>📈 ${this.state.settings.language === "ar" ? "زد المسؤولية عن القرارات" : "Increase ownership of decisions"}</li>` : ""}
+              </ul>
+            </div>
+
+            <div class="insights-section">
+              <h4>${this.state.settings.language === "ar" ? "الخطوات التالية:" : "Next Steps:"}</h4>
+              <ul class="simple-list">
+                <li>📝 ${this.state.settings.language === "ar" ? "أعد السيرة الذاتية مع أمثلة واقعية من تجربتك" : "Update your CV with real examples of these skills"}</li>
+                <li>🎥 ${this.state.settings.language === "ar" ? "استعد للمقابلة الذكية" : "Prepare for smart interview"}</li>
+                <li>💼 ${this.state.settings.language === "ar" ? "تقدم للوظائف المطابقة" : "Apply to matching jobs"}</li>
+              </ul>
+            </div>
           </article>
         </section>
       `;
     }
 
-    interviewPage() {
+    formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, "0")}`;
+    }
+
+  interviewPage() {
       const progress = this.currentProgress();
       if (this.state.aiInterviewDone) {
+        const scoreDetail = this.state.aiInterviewScoreDetail || (progress && progress.interview) || { feedback: [], overall: 0 };
+        const finalScore = scoreDetail.overall != null ? scoreDetail.overall : (progress && progress.interview ? progress.interview.score : 0);
         return `
           <section class="page-head">
             <h1>${this.state.settings.language === "ar" ? "نتيجة المقابلة الذكية" : "Smart Interview Result"}</h1>
           </section>
-          <section class="cards two-up">
+          <section class="cards two-up interview-result-grid">
             <article class="info-card">
               <h3>${this.state.settings.language === "ar" ? "النتيجة النهائية" : "Final score"}</h3>
-              <div class="ring" style="--value:${progress.interview.score}">
-                <span>${progress.interview.score}</span>
+              <div class="ring" style="--value:${finalScore}">
+                <span>${finalScore}</span>
               </div>
             </article>
             <article class="info-card">
-              <h3>${this.state.settings.language === "ar" ? "نصائح التحسين" : "Improvement tips"}</h3>
+              <h3>${this.state.settings.language === "ar" ? "ملاحظات الذكاء الاصطناعي" : "AI feedback"}</h3>
               <ul class="simple-list">
-                <li>${this.state.settings.language === "ar" ? "ابدأ بإجابات أكثر تحديداً وقابلة للقياس." : "Lead with more measurable, specific examples."}</li>
-                <li>${this.state.settings.language === "ar" ? "اربط خبرتك بأثر واضح على الفريق أو العميل." : "Tie your experience to a clear team or customer outcome."}</li>
-                <li>${this.state.settings.language === "ar" ? "اختم كل إجابة بخطوة أو نتيجة." : "Close each answer with an action or result."}</li>
+                ${(scoreDetail.feedback || []).map((item) => `<li>${item}</li>`).join("") || `<li>${this.state.settings.language === "ar" ? "أكمل جميع الإجابات للحصول على ملاحظات." : "Provide answers to receive feedback."}</li>`}
               </ul>
               <button class="btn btn-ghost" data-action="reset-interview">${this.state.settings.language === "ar" ? "إعادة التجربة" : "Restart"}</button>
             </article>
           </section>
-          <section class="cards">
-            ${this.futureSoftSkillsCardMarkup()}
-          </section>
         `;
       }
+      
       const current = DATA.interviewQuestions[this.state.aiInterviewIndex];
+      const isAr = this.state.settings.language === "ar";
+      const currentDraft = this.state.aiInterviewDrafts[this.state.aiInterviewIndex] || "";
+      const isMicActive = this.state.micActive;
+
       return `
         <section class="page-head">
-          <h1>${this.state.settings.language === "ar" ? "المقابلة الذكية" : "Smart Interview"}</h1>
+          <h1>${isAr ? "المقابلة الذكية" : "Smart Interview"}</h1>
         </section>
         <section class="cards interview-layout">
-          ${this.futureSoftSkillsCardMarkup()}
-          <article class="info-card interview-panel interview-main-card">
-            <div class="session-inline-card">
-              <h3>${this.state.settings.language === "ar" ? "حالة الجلسة" : "Session state"}</h3>
-              <p class="session-count">${this.state.settings.language === "ar" ? `السؤال ${this.state.aiInterviewIndex + 1} من ${DATA.interviewQuestions.length}` : `Question ${this.state.aiInterviewIndex + 1} of ${DATA.interviewQuestions.length}`}</p>
+          <article class="info-card interview-panel interview-main-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px 20px;">
+            
+            <div style="text-align: center; margin-bottom: 2rem;">
+               <span style="display: inline-block; padding: 4px 12px; background: rgba(19, 180, 183, 0.1); color: #13B4B7; border-radius: 12px; font-weight: bold; margin-bottom: 1rem;">
+                  ${isAr ? `السؤال ${this.state.aiInterviewIndex + 1} من ${DATA.interviewQuestions.length}` : `Question ${this.state.aiInterviewIndex + 1} of ${DATA.interviewQuestions.length}`}
+               </span>
+               <h2 style="font-size: 1.8rem; color: var(--text); line-height: 1.5; max-width: 600px; margin: 0 auto;">
+                   ${isAr ? current.qAr : current.qEn}
+               </h2>
+               <button class="btn btn-ghost" data-action="read-question" style="margin-top: 1rem; color: #10416A;">
+                  🔊 ${isAr ? "استمع للسؤال" : "Listen again"}
+               </button>
             </div>
-            <p class="interview-card-lead">${this.state.settings.language === "ar" ? "خمس أسئلة، دردشة بسيطة، ثم تقييم نهائي." : "Five questions, a lightweight chat flow, then a final score."}</p>
-            <div class="chat-thread">
-              ${DATA.interviewQuestions.slice(0, this.state.aiInterviewIndex + 1).map((question, index) => `
-                <div class="chat-bubble bot">${this.state.settings.language === "ar" ? question.qAr : question.qEn}</div>
-                ${this.state.aiInterviewDrafts[index] ? `<div class="chat-bubble user">${this.state.aiInterviewDrafts[index]}</div>` : ""}
-              `).join("")}
+            
+            <div class="interview-answer-box">
+               ${currentDraft ? `
+                  <p style="font-size: 1.2rem; color: var(--text); line-height: 1.6; text-align: center;">
+                      "${currentDraft}"
+                  </p>
+               ` : `
+                  <p class="muted" style="text-align: center;">
+                     ${isAr ? "إجابتك ستظهر هنا تلقائياً..." : "Your answer will appear here..."}
+                  </p>
+               `}
+               
+               ${isMicActive ? `
+               <div style="position: absolute; top: 12px; right: 12px; width: 12px; height: 12px; background: #f44336; border-radius: 50%; box-shadow: 0 0 8px #f44336; animation: blink 1s infinite alternate;"></div>
+               <style>@keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.3; } }</style>
+               ` : ''}
             </div>
-            <label>${this.state.settings.language === "ar" ? "إجابتك" : "Your answer"}
-              <textarea rows="4" data-chat-input placeholder="${this.state.settings.language === "ar" ? "اكتب إجابة مختصرة" : "Write a short answer"}">${this.state.aiInterviewDrafts[this.state.aiInterviewIndex] || ""}</textarea>
-            </label>
-            <button class="btn btn-primary" data-action="next-interview">${this.state.aiInterviewIndex === DATA.interviewQuestions.length - 1 ? (this.state.settings.language === "ar" ? "إنهاء وتقييم" : "Finish & score") : (this.state.settings.language === "ar" ? "السؤال التالي" : "Next question")}</button>
+            
+            <div style="display: flex; gap: 16px; margin-top: 30px; align-items: center;">
+               <button type="button" data-action="start-mic" style="border-radius: 50px; width: 64px; height: 64px; border: none; background: ${isMicActive ? '#f44336' : '#13B4B7'}; color: white; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px ${isMicActive ? 'rgba(244, 67, 54, 0.4)' : 'rgba(19, 180, 183, 0.4)'}; transition: all 0.3s ease;">
+                   ${isMicActive ? '⏹' : '🎤'}
+               </button>
+               
+               <button type="button" class="btn btn-primary" data-action="next-interview" style="border-radius: 50px; padding: 0 32px; height: 64px; font-size: 1.1rem; background: #10416A;">
+                   ${this.state.aiInterviewIndex === DATA.interviewQuestions.length - 1 ? (isAr ? "إنهاء وتقييم" : "Finish & score") : (isAr ? "السؤال التالي" : "Next question")}
+               </button>
+            </div>
+
+            <p class="muted" style="margin-top: 20px; font-size: 0.9rem;">
+               ${isAr ? (isMicActive ? "جاري الاستماع، انقر المربع للإيقاف..." : "انقر على المايكروفون للتحدث") : (isMicActive ? "Listening, tap square to stop..." : "Tap the mic to start speaking")}
+            </p>
           </article>
         </section>
       `;
     }
-
     profilePage() {
       const user = this.currentUser();
       const progress = this.currentProgress();
       const readiness = this.getReadiness(user.id);
+      const roleOptions = Array.from(new Set(DATA.jobs.map((job) => ({
+        en: job.titleEn,
+        ar: job.titleAr
+      })))).slice(0, 30); // limit for UI brevity
       return `
         <section class="page-head">
           <h1>${this.state.settings.language === "ar" ? "الملف الذكي" : "Smart Profile"}</h1>
@@ -2984,9 +4547,24 @@
                 </div>
               </div>
             </div>
-            <div class="chip-row">${(user.topSkills || []).slice(0, 4).map((skill) => `<span class="chip">${skill}</span>`).join("")}</div>
-            <div class="badge-row">${progress.badges.length ? progress.badges.map((badge) => `<span class="badge-soft">${badge}</span>`).join("") : `<span class="badge-soft">${this.t("empty")}</span>`}</div>
-            <button class="btn btn-primary" data-action="download-profile">${this.state.settings.language === "ar" ? "تنزيل PNG" : "Download PNG"}</button>
+            <div class="smart-profile-vertical-sections">
+              <div class="smart-profile-vertical-card">
+                <small class="smart-profile-vertical-title">${this.state.settings.language === "ar" ? "المهارات البارزة" : "Top skills"}</small>
+                <div class="smart-profile-vertical-list">
+                  ${(user.topSkills || []).slice(0, 6).map((skill) => `<div class="smart-profile-vertical-item"><span>${skill}</span></div>`).join("")}
+                </div>
+              </div>
+              <div class="smart-profile-vertical-card">
+                <small class="smart-profile-vertical-title">${this.state.settings.language === "ar" ? "الإشارات الموثقة" : "Verified badges"}</small>
+                <div class="smart-profile-vertical-list">
+                  ${progress.badges.length
+                    ? progress.badges.map((badge) => `<div class="smart-profile-vertical-item"><span>${badge}</span></div>`).join("")
+                    : `<div class="smart-profile-vertical-item"><span>${this.t("empty")}</span></div>`
+                  }
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary smart-profile-download-btn" data-action="download-profile">${this.state.settings.language === "ar" ? "تنزيل PNG" : "Download PNG"}</button>
           </article>
           <div class="smart-profile-side">
             <article class="info-card smart-profile-card">
@@ -3000,6 +4578,22 @@
                   <strong>${this.candidateRole(user)}</strong>
                 </div>
                 <div class="smart-profile-list-row">
+                  <small>${this.state.settings.language === "ar" ? "الدور المستهدف" : "Target role"}</small>
+                  <div class="smart-profile-target-role">
+                    <select id="profileTargetRole">
+                      <option value="">${this.state.settings.language === "ar" ? "اختر الدور" : "Choose role"}</option>
+                  ${roleOptions.map((opt) => `
+                        <option value="${opt.en}" ${user.targetRoleEn === opt.en ? "selected" : ""}>
+                          ${this.state.settings.language === "ar" ? opt.ar : opt.en}
+                        </option>
+                      `).join("")}
+                    </select>
+                    <button class="btn btn-primary btn-small" data-action="save-target-role" type="button">
+                      ${this.state.settings.language === "ar" ? "حفظ" : "Save"}
+                    </button>
+                  </div>
+                </div>
+                <div class="smart-profile-list-row">
                   <small>${this.state.settings.language === "ar" ? "المهارات" : "Skills"}</small>
                   <strong>${(user.topSkills || []).join(", ") || "-"}</strong>
                 </div>
@@ -3007,6 +4601,35 @@
                   <small>${this.state.settings.language === "ar" ? "الإنجازات" : "Verified badges"}</small>
                   <strong>${progress.badges.join(", ") || "-"}</strong>
                 </div>
+              </div>
+            </article>
+            <article class="info-card smart-profile-card">
+              <div class="hero-summary-head">
+                <span class="hero-summary-label">${this.state.settings.language === "ar" ? "حالة السيرة الذاتية" : "CV Status"}</span>
+                <h3>${this.state.settings.language === "ar" ? "تحليل موثق بذكاء اصطناعي" : "AI-verified CV insights"}</h3>
+              </div>
+              <div class="smart-profile-list">
+                ${user.cvAnalysis ? `
+                  <div class="smart-profile-list-row">
+                    <small>${this.state.settings.language === "ar" ? "نسبة الملاءمة" : "Job fit"}</small>
+                    <strong>${user.cvAnalysis.aiInsights && user.cvAnalysis.aiInsights.job_fit_score !== null 
+                      ? user.cvAnalysis.aiInsights.job_fit_score + "%" 
+                      : (user.cvAnalysis.scores && user.cvAnalysis.scores.TotalScore 
+                        ? user.cvAnalysis.scores.TotalScore + "/100" 
+                        : "-")}</strong>
+                  </div>
+                  <div class="smart-profile-list-row">
+                    <small>${this.state.settings.language === "ar" ? "تم التحديث" : "Updated"}</small>
+                    <strong>${new Date().toLocaleDateString(this.state.settings.language === "ar" ? "ar-SA" : "en-US")}</strong>
+                  </div>
+                  <div class="smart-profile-list-row">
+                    <small>${this.state.settings.language === "ar" ? "الحالة" : "Status"}</small>
+                    <strong style="color: #4caf50;">${this.state.settings.language === "ar" ? "✓ محفوظة" : "✓ Saved"}</strong>
+                  </div>
+                ` : `
+                  <p style="color: var(--text-soft); font-size: 0.9em;">${this.state.settings.language === "ar" ? "لم تحمل سيرة ذاتية بعد" : "No CV uploaded yet"}</p>
+                  <button class="btn btn-sm btn-ghost" data-nav="/upload-cv" style="margin-top: 8px;">${this.state.settings.language === "ar" ? "ارفع السيرة" : "Upload CV"}</button>
+                `}
               </div>
             </article>
             <article class="info-card smart-profile-card">
@@ -3039,6 +4662,7 @@
                 <span class="hero-summary-label">${this.state.settings.language === "ar" ? "احتياج التوظيف الحالي" : "Current hiring need"}</span>
                 <h3>${activeRole.title}</h3>
                 <p>${this.state.settings.language === "ar" ? "أدخل المسمى، المهارات المطلوبة، الخبرة، والراتب المتوقع. بعدها يفرز لك النظام المرشحين حسب جاهزيتهم الفعلية." : "Set the role title, required skills, years of experience, and expected compensation. The system then ranks candidates by actual readiness."}</p>
+                <small class="muted">${this.state.settings.language === "ar" ? `تم الترتيب لـ ${activeRole.title}` : `Ranked for ${activeRole.title}`}</small>
               </div>
               <div class="company-overview-metrics">
                 <div class="company-metric">
@@ -3051,24 +4675,28 @@
                 </div>
               </div>
             </div>
-            <div class="company-overview-grid">
-              <div class="company-overview-item">
-                <small>${this.state.settings.language === "ar" ? "المهارات المطلوبة" : "Required skills"}</small>
-                <strong>${activeRole.requiredSkills.join(" / ")}</strong>
-              </div>
-              <div class="company-overview-item">
-                <small>${this.state.settings.language === "ar" ? "سنوات الخبرة" : "Years"}</small>
-                <strong>${activeRole.years}</strong>
-              </div>
-              <div class="company-overview-item">
-                <small>${this.state.settings.language === "ar" ? "الراتب المتوقع" : "Expected salary"}</small>
-                <strong>${activeRole.salary}</strong>
-              </div>
-              <div class="company-overview-item">
-                <small>${this.state.settings.language === "ar" ? "الموقع" : "Location"}</small>
-                <strong>${activeRole.location}</strong>
-              </div>
+          <div class="company-overview-grid">
+            <div class="company-overview-item">
+              <small>${this.state.settings.language === "ar" ? "المهارات المطلوبة" : "Required skills"}</small>
+              <strong>${activeRole.requiredSkills.join(" / ")}</strong>
             </div>
+            <div class="company-overview-item">
+              <small>${this.state.settings.language === "ar" ? "سنوات الخبرة" : "Years"}</small>
+              <strong>${activeRole.years}</strong>
+            </div>
+            <div class="company-overview-item">
+              <small>${this.state.settings.language === "ar" ? "الراتب المتوقع" : "Expected salary"}</small>
+              <strong>${activeRole.salary}</strong>
+            </div>
+            <div class="company-overview-item">
+              <small>${this.state.settings.language === "ar" ? "الموقع" : "Location"}</small>
+              <strong>${activeRole.location}</strong>
+            </div>
+            <div class="company-overview-item">
+              <small>${this.state.settings.language === "ar" ? "مجموع نقاط الترتيب" : "Ranking factors"}</small>
+              <strong>${this.state.settings.language === "ar" ? "المهارات + الجاهزية + العنوان + المدينة" : "Skills + readiness + title + city"}</strong>
+            </div>
+          </div>
           </article>
           <section class="company-grid">
             <form class="company-panel-card company-role-form" data-form="role-requirement">
@@ -3089,6 +4717,7 @@
                 <div>
                   <h3>${this.state.settings.language === "ar" ? "المرشحون حسب الجاهزية" : "Candidates by readiness"}</h3>
                   <p>${this.state.settings.language === "ar" ? "عرض سريع يوضح من الأقرب لهذا الدور الآن." : "A quick view of who is closest to this role right now."}</p>
+                  <small class="muted">${this.state.settings.language === "ar" ? `تم الترتيب لـ ${activeRole.title}` : `Ranked for ${activeRole.title}`}</small>
                 </div>
                 <button class="btn btn-ghost" data-nav="/candidates">${this.state.settings.language === "ar" ? "عرض الكل" : "View all"}</button>
               </div>
@@ -3183,7 +4812,7 @@
                 <div class="badge-row">${(this.state.progress[entry.student.id].badges || []).map((badge) => `<span class="badge-soft">${badge}</span>`).join("")}</div>
                 <div class="actions-row">
                   <button class="btn btn-ghost" data-nav="/candidate/${entry.student.id}">${this.t("viewProfile")}</button>
-                  <button class="btn btn-primary" data-action="invite-candidate">${this.t("invite")}</button>
+                  <button class="btn btn-primary" data-action="invite-candidate" data-candidate-id="${entry.student.id}" ${this.isCandidateInvited(entry.student.id) ? "disabled" : ""}>${this.isCandidateInvited(entry.student.id) ? (this.state.settings.language === "ar" ? "تمت الدعوة" : "Invited") : this.t("invite")}</button>
                 </div>
               </article>
             `).join("")}
@@ -3217,7 +4846,7 @@
             <h3>${this.state.settings.language === "ar" ? "الروابط والأدلة" : "Portfolio & proof"}</h3>
             <div class="stack">${(student.portfolio || []).map((link) => `<p>${link}</p>`).join("")}</div>
             <p>${this.state.settings.language === "ar" ? `المختبر المكتمل: ${progress.lab.passed ? "نعم" : "لا"}` : `Micro-lab completed: ${progress.lab.passed ? "Yes" : "No"}`}</p>
-            <button class="btn btn-primary" data-action="invite-candidate">${this.t("invite")}</button>
+            <button class="btn btn-primary" data-action="invite-candidate" data-candidate-id="${student.id}" ${this.isCandidateInvited(student.id) ? "disabled" : ""}>${this.isCandidateInvited(student.id) ? (this.state.settings.language === "ar" ? "تمت الدعوة" : "Invited") : this.t("invite")}</button>
           </article>
         </section>
       `;
@@ -3401,6 +5030,24 @@
           ${this.state.toast ? `<div class="toast-snackbar">${this.state.toast}</div>` : ""}
         </div>
       `;
+
+      const finishBtn = this.root.querySelector('[data-action="complete-behavioral-test"]');
+      if (finishBtn) {
+        finishBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.completeBehavioralTest();
+        });
+      }
+
+      const nextBtn = this.root.querySelector('[data-action="next-behavioral-question"]');
+      if (nextBtn) {
+        nextBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.nextBehavioralQuestion();
+        });
+      }
     }
   }
 

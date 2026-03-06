@@ -13,7 +13,18 @@
     <script src="https://www.gstatic.com/firebasejs/12.10.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.10.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore-compat.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js"></script>
+    <!-- Stable UMD build of pdf.js with global pdfjsLib -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      // Ensure pdf.js is correctly attached to window and worker is configured
+      (function () {
+        var lib = window.pdfjsLib || window["pdfjsLib"];
+        if (lib && lib.GlobalWorkerOptions) {
+          lib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+          window.pdfjsLib = lib;
+        }
+      })();
+    </script>
     <script src="data.js"></script>
     <script src="firebase.js"></script>
     <script src="app.js"></script>

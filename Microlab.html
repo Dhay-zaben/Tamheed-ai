@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tamheed - Enterprise Skill Accelerator</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/nginx/nginx.min.js"></script>
+
+    <style>
+        /* --- CSS Variables & Theming --- */
+        :root {
+            --bg-main: #f0f4f8;
+            --bg-card: rgba(255, 255, 255, 0.95);
+            --border-glass: rgba(19, 180, 183, 0.2);
+            --text-primary: #0d2c4a;
+            --text-secondary: #5a7184;
+            --accent-teal: #13B4B7;
+            --accent-teal-hover: #0fa1a3;
+            --accent-green: #2ecc71;
+            --accent-danger: #e74c3c;
+            --accent-warning: #f39c12;
+            --shadow-subtle: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            
+            --ide-bg: #1e1e1e;
+            --ide-header: #252526;
+            --ide-text: #d4d4d4;
+            --ide-border: #333333;
+        }
+
+        [data-theme="dark"] {
+            --bg-main: #0b141a;
+            --bg-card: rgba(20, 30, 40, 0.85);
+            --border-glass: rgba(19, 180, 183, 0.15);
+            --text-primary: #e0e6ed;
+            --text-secondary: #8b9eb0;
+            --shadow-subtle: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+        }
+
+        /* Animated Background Gradient */
+        @keyframes bgGradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* --- Global Reset & Typography --- */
+        * { box-sizing: border-box; transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease; }
+        
+        body {
+            font-family: 'Outfit', sans-serif; color: var(--text-primary);
+            margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            background: linear-gradient(-45deg, var(--bg-main), #e2e8f0, var(--bg-main));
+            background-size: 400% 400%; animation: bgGradient 20s ease infinite;
+        }
+
+        [data-theme="dark"] body {
+            background: linear-gradient(-45deg, var(--bg-main), #111a22, var(--bg-main));
+            background-size: 400% 400%; animation: bgGradient 20s ease infinite;
+        }
+
+        /* Accessibility: Focus Rings */
+        *:focus-visible { outline: 2px solid var(--accent-teal); outline-offset: 2px; }
+
+        /* Glassmorphism */
+        .glass {
+            background: var(--bg-card); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass); box-shadow: var(--shadow-subtle);
+        }
+
+        /* --- Header & Navigation --- */
+        header { display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; z-index: 100; flex-shrink: 0; }
+.brand { font-size: 24px; font-weight: 700; background: linear-gradient(45deg, var(--text-primary), var(--accent-teal)); -webkit-background-clip: text; background-clip: text; color: transparent; }        
+        .controls { display: flex; gap: 15px; align-items: center; }
+        
+        .xp-badge { font-weight: 700; color: var(--accent-warning); background: rgba(243,156,18,0.1); padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(243,156,18,0.3); font-size: 14px; display: flex; align-items: center; gap: 5px;}
+        .control-group { display: flex; align-items: center; gap: 8px; background: rgba(19, 180, 183, 0.05); padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border-glass); }
+        .control-group label { font-size: 13px; font-weight: 600; cursor: pointer; }
+        
+        .btn {
+            padding: 10px 20px; border-radius: 8px; border: none; font-family: inherit; font-weight: 600; 
+            cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; gap: 8px; font-size: 14px; position: relative; overflow: hidden;
+        }
+        .btn-ghost { background: transparent; color: var(--text-primary); border: 1px solid var(--border-glass); }
+        .btn-ghost:hover { background: rgba(19, 180, 183, 0.1); border-color: var(--accent-teal); transform: translateY(-2px); }
+        
+        .btn-primary { background: linear-gradient(135deg, var(--accent-teal), var(--accent-teal-hover)); color: white; box-shadow: 0 4px 15px rgba(19,180,183,0.3); }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(19,180,183,0.5); }
+        .btn-primary::after { content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent); transform: skewX(-20deg); transition: 0s; }
+        .btn-primary:hover:not(:disabled)::after { left: 200%; transition: 0.6s ease-in-out; }
+        
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--accent-teal); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* --- Main Content Layout --- */
+        main { display: flex; flex: 1; overflow: hidden; padding: 0 20px 20px 20px; gap: 20px; }
+        .view-section { display: none; width: 100%; height: 100%; animation: fadeUp 0.4s ease-out forwards; }
+        .view-section.active { display: flex; }
+        
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes popIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+
+        /* --- Dashboard View --- */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; width: 100%; max-width: 1200px; margin: 0 auto; align-content: center; }
+        
+        .track-card { 
+            border-radius: 16px; padding: 30px; cursor: pointer; position: relative; overflow: hidden; 
+            display: flex; flex-direction: column; gap: 15px; border-top: 4px solid transparent; 
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+        .track-card::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent);
+            transform: skewX(-20deg); transition: 0s; z-index: 1; pointer-events: none;
+        }
+        [data-theme="dark"] .track-card::before { background: linear-gradient(to right, transparent, rgba(255,255,255,0.05), transparent); }
+        .track-card:hover { transform: translateY(-5px); border-top-color: var(--accent-teal); box-shadow: 0 15px 35px rgba(19,180,183,0.15); }
+        .track-card:hover::before { left: 200%; transition: 0.8s ease-in-out; }
+        
+        .track-tag { align-self: flex-start; background: rgba(19,180,183,0.15); color: var(--accent-teal); padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase;}
+        .track-card h2 { margin: 0; font-size: 22px; position: relative; z-index: 2;}
+        .track-card p { margin: 0; color: var(--text-secondary); line-height: 1.6; font-size: 14px; position: relative; z-index: 2;}
+
+        /* --- Workspace View (Responsive Flex) --- */
+        #workspace-view { flex-direction: row; gap: 20px; }
+        
+        /* Left Panel */
+        .problem-panel { flex: 0.4; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; min-width: 350px; }
+        
+        .prog-bar-container { width: 100%; height: 4px; background: rgba(0,0,0,0.05); position: relative; cursor: help; }
+        .prog-bar-fill { height: 100%; background: var(--accent-teal); width: 0%; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        
+        .panel-nav { display: flex; border-bottom: 1px solid var(--border-glass); background: rgba(0,0,0,0.02); flex-shrink: 0; position: relative; }
+        .tab-btn { flex: 1; background: none; border: none; padding: 15px 10px; font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: color 0.2s; position: relative; z-index: 2;}
+        .tab-btn:hover:not(:disabled) { color: var(--accent-teal); background: rgba(19,180,183,0.05); }
+        .tab-btn.active { color: var(--accent-teal); }
+        .tab-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+        
+        /* Sliding Underline */
+        .tab-slider { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--accent-teal); width: 33.333%; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 1;}
+
+        .panel-content { flex: 1; padding: 25px; overflow-y: auto; scroll-behavior: smooth; }
+        .tab-pane { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .tab-pane.active { display: block; }
+        
+        /* Content Styling */
+        .header-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;}
+        .problem-header h2 { margin: 0 0 10px 0; font-size: 24px; }
+        .difficulty-tag { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .diff-hard { background: rgba(231,76,60,0.1); color: var(--accent-danger); border: 1px solid rgba(231,76,60,0.2);}
+        .diff-med { background: rgba(243,156,18,0.1); color: var(--accent-warning); border: 1px solid rgba(243,156,18,0.2);}
+        .diff-easy { background: rgba(46,204,113,0.1); color: var(--accent-green); border: 1px solid rgba(46,204,113,0.2);}
+        
+        .teaching-badge { display: none; font-size: 11px; font-weight: 700; color: var(--accent-teal); background: rgba(19,180,183,0.1); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(19,180,183,0.2);}
+
+        .desc-text { line-height: 1.7; color: var(--text-secondary); font-size: 15px; margin-bottom: 20px;}
+        .task-list { background: rgba(19, 180, 183, 0.05); padding: 20px; border-radius: 12px; border-left: 3px solid var(--accent-teal); margin-bottom: 20px;}
+        .task-list ul { margin: 0; padding-left: 20px; color: var(--text-primary); font-size: 14.5px; line-height: 1.6; }
+
+        .hint-box { background: rgba(243, 156, 18, 0.1); border-left: 3px solid var(--accent-warning); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; line-height: 1.6; animation: fadeUp 0.3s forwards;}
+        
+        /* Theory Collapsibles */
+        details.theory-section { margin-bottom: 15px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-glass); border-radius: 8px; overflow: hidden; }
+        details.theory-section summary { padding: 15px; font-weight: 600; color: var(--accent-teal); cursor: pointer; outline: none; display: flex; align-items: center; justify-content: space-between; }
+        details.theory-section summary::-webkit-details-marker { display: none; }
+        details.theory-section summary::after { content: '▼'; font-size: 12px; transition: transform 0.3s; }
+        details[open].theory-section summary::after { transform: rotate(180deg); border-bottom: 1px solid var(--border-glass); }
+        .theory-inner { padding: 15px; font-size: 14px; line-height: 1.7; color: var(--text-secondary); border-top: 1px solid var(--border-glass); }
+        .theory-diagram { width: 100%; background: rgba(0,0,0,0.05); padding: 20px; border-radius: 8px; text-align: center; margin: 15px 0; font-style: italic; color: var(--text-secondary); border: 1px dashed var(--border-glass);}
+
+        .feedback-alert { padding: 15px; border-radius: 8px; margin-top: 20px; display: none; font-size: 14px; font-weight: 500; border-left: 4px solid; animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .feedback-alert.success { border-color: var(--accent-green); background: rgba(46,204,113,0.1); color: var(--accent-green); }
+        .feedback-alert.error { border-color: var(--accent-danger); background: rgba(231,76,60,0.1); color: var(--accent-danger); }
+        .shake-animation { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+
+        /* Right Panel: Engine */
+        .engine-panel { flex: 0.6; display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; border: 1px solid var(--border-glass); background: var(--ide-bg); min-width: 400px; }
+        
+        /* Quiz Interface */
+        #quiz-container { display: none; flex: 1; padding: 40px; background: var(--bg-main); overflow-y: auto; }
+        .quiz-question { font-size: 20px; color: var(--text-primary); font-weight: 600; margin-bottom: 30px; line-height: 1.5; }
+        .quiz-options { display: flex; flex-direction: column; gap: 12px; }
+        .quiz-option { 
+            background: var(--bg-card); border: 2px solid var(--border-glass); padding: 15px 20px; 
+            border-radius: 10px; cursor: pointer; font-size: 15px; font-weight: 500; color: var(--text-primary);
+            transition: all 0.2s; display: flex; align-items: center; gap: 15px;
+        }
+        .quiz-option:hover:not(.locked) { border-color: var(--accent-teal); background: rgba(19, 180, 183, 0.05); }
+        .quiz-option.selected { border-color: var(--accent-teal); background: rgba(19, 180, 183, 0.1); }
+        .quiz-option.locked { cursor: not-allowed; opacity: 0.8; }
+        .quiz-option.correct-ans { border-color: var(--accent-green); background: rgba(46,204,113,0.1); }
+        .quiz-option.wrong-ans { border-color: var(--accent-danger); background: rgba(231,76,60,0.1); }
+        .quiz-option input[type="radio"] { transform: scale(1.2); accent-color: var(--accent-teal); }
+        
+        .quiz-text-input { width: 100%; padding: 15px; border: 2px solid var(--border-glass); border-radius: 10px; font-size: 15px; font-family: inherit; background: var(--bg-card); color: var(--text-primary); }
+        .quiz-text-input:focus { outline: none; border-color: var(--accent-teal); }
+        .quiz-text-input:disabled { opacity: 0.7; cursor: not-allowed; }
+
+        /* Code IDE Interface */
+        #ide-container { display: flex; flex-direction: column; flex: 1; height: 100%; }
+        .ide-header { background: var(--ide-header); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; color: #858585; font-size: 13px; font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid var(--ide-border); flex-shrink: 0;}
+        .CodeMirror { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 14px; height: auto !important; padding: 10px 0; }
+        
+        /* Hackerrank-style Vulnerability Highlight */
+        .vuln-line-highlight { background: rgba(231, 76, 60, 0.15) !important; border-bottom: 1px dashed var(--accent-danger); }
+        .vuln-gutter { width: 15px; text-align: center; }
+
+        /* Terminal */
+        .terminal-container { height: 220px; background: #0b0b0b; padding: 15px; font-family: 'JetBrains Mono', monospace; font-size: 13.5px; overflow-y: auto; border-top: 1px solid var(--ide-border); display: flex; flex-direction: column; flex-shrink: 0; scroll-behavior: smooth; }
+        .term-line { margin-bottom: 6px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
+        .t-sys { color: #888; }
+        .t-cmd { color: #56b6c2; }
+        .t-err { color: #e06c75; }
+        .t-suc { color: #98c379; }
+        .t-warn { color: #e5c07b; }
+
+        .engine-footer { background: var(--ide-header); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--ide-border); flex-shrink: 0;}
+        .footer-left { display: flex; gap: 15px; align-items: center;}
+        .footer-right { display: flex; gap: 15px;}
+        .timer-display { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: bold; color: var(--accent-warning); background: rgba(243,156,18,0.1); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent-warning); display: none;}
+
+        /* --- Results View --- */
+        #results-view { flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow-y: auto;}
+        .results-card { border-radius: 16px; padding: 50px; max-width: 800px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px; margin: auto; }
+        
+        /* Circular Progress */
+        .circular-chart { display: block; margin: 0 auto; max-width: 150px; max-height: 150px; }
+        .circle-bg { fill: none; stroke: rgba(19, 180, 183, 0.1); stroke-width: 3.8; }
+        .circle { fill: none; stroke-width: 2.8; stroke-linecap: round; transition: stroke-dasharray 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .percentage { fill: var(--accent-teal); font-family: 'Outfit', sans-serif; font-size: 0.5em; font-weight: 700; text-anchor: middle; }
+        
+        .performance-breakdown { display: flex; gap: 30px; margin-top: 10px; }
+        .perf-stat { display: flex; flex-direction: column; align-items: center; }
+        .perf-val { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+        .perf-lbl { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; }
+
+        .badges-container { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-top: 20px; }
+        .achievement-badge { background: linear-gradient(135deg, rgba(19,180,183,0.1), rgba(46,204,113,0.1)); border: 1px solid var(--accent-teal); padding: 10px 20px; border-radius: 30px; display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; color: var(--text-primary); animation: popIn 0.5s ease backwards; }
+
+        /* Certifications Grid */
+        .cert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; width: 100%; margin-top: 10px; }
+        .cert-card { background: rgba(19, 180, 183, 0.05); border: 1px solid var(--border-glass); border-radius: 8px; padding: 15px; text-align: left; }
+        .cert-card h4 { margin: 0 0 5px 0; color: var(--accent-teal); font-size: 15px;}
+        .cert-card p { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5;}
+
+        /* --- Media Queries for Responsiveness --- */
+        @media (max-width: 1024px) {
+            #workspace-view { flex-direction: column; overflow-y: auto; }
+            .problem-panel, .engine-panel { flex: none; min-height: 500px; width: 100%; }
+            main { overflow-y: auto; padding: 0 10px 10px 10px; }
+            .tab-slider { width: 33.33%; }
+        }
+        @media (max-width: 600px) {
+            .controls label { display: none; }
+            header { padding: 15px; }
+            .brand { font-size: 20px; }
+            .btn { padding: 8px 15px; font-size: 13px; }
+            .performance-breakdown { gap: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="glass" id="app-header">
+        <div class="brand">Tamheed<span class="logo-accent">Labs</span></div>
+        <div class="controls">
+            <div class="xp-badge" id="ui-xp-display" title="Experience Points earned from accurate validations">0 XP</div>
+            
+            <div class="control-group" title="Enable Teaching Mode to unlock conceptual deep dives.">
+                <label for="teaching-toggle">🎓 Teaching Mode</label>
+                <label class="switch">
+                    <input type="checkbox" id="teaching-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <button class="btn btn-ghost" id="theme-btn" aria-label="Toggle Theme" title="Toggle Light/Dark Mode">
+                <span id="theme-icon">🌙</span>
+            </button>
+            <button class="btn btn-ghost" id="nav-dashboard" style="display:none;" title="Return to Track Selection">
+                Exit Track
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <section id="dashboard-view" class="view-section active">
+            <div class="dashboard-grid">
+                <div class="track-card glass" data-track="network" tabindex="0" role="button">
+                    <span class="track-tag">Infrastructure</span>
+                    <h2>Network & Routing Defense</h2>
+                    <p>Debug OSPF adjacencies, fix Firewall ACLs, and remediate BGP misconfigurations.</p>
+                </div>
+                <div class="track-card glass" data-track="architecture" tabindex="0" role="button">
+                    <span class="track-tag">Hardware & Systems</span>
+                    <h2>Computer Architecture</h2>
+                    <p>Identify memory leaks and remediate buffer overflow vulnerabilities in C-style structures.</p>
+                </div>
+                <div class="track-card glass" style="border-top-color: var(--accent-warning);" data-track="foundations" tabindex="0" role="button">
+                    <span class="track-tag" style="color: var(--accent-warning); background: rgba(243,156,18,0.15);">Knowledge Check</span>
+                    <h2>Security Foundations Quiz</h2>
+                    <p>Validate your theoretical knowledge of cryptography, access controls, and zero trust protocols.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="workspace-view" class="view-section">
+            
+            <div class="problem-panel glass">
+                <div class="prog-bar-container" id="ui-progress-container" title="0%">
+                    <div class="prog-bar-fill" id="ui-progress"></div>
+                </div>
+                
+                <div class="panel-nav">
+                    <button class="tab-btn active" data-tab="tab-tasks" data-idx="0" id="btn-tab-tasks">Task</button>
+                    <button class="tab-btn" data-tab="tab-hints" data-idx="1" id="btn-tab-hints">Hints</button>
+                    <button class="tab-btn" data-tab="tab-theory" data-idx="2" id="btn-tab-theory" disabled title="Enable Teaching Mode or solve the task to unlock.">Theory 🔒</button>
+                    <div class="tab-slider" id="tab-slider"></div>
+                </div>
+
+                <div class="panel-content" id="panel-content-area">
+                    <div id="tab-tasks" class="tab-pane active">
+                        <div class="header-meta">
+                            <span class="difficulty-tag" id="ui-difficulty">Difficulty</span>
+                            <span class="teaching-badge" id="ui-teaching-badge">📘 Teaching Mode Active</span>
+                        </div>
+                        <div class="problem-header"><h2 id="ui-title">Scenario Title</h2></div>
+                        <div class="desc-text" id="ui-desc"></div>
+                        <div class="task-list">
+                            <strong style="display:block; margin-bottom:8px;">Objectives:</strong>
+                            <ul id="ui-tasks"></ul>
+                        </div>
+                        <div id="ui-feedback" class="feedback-alert" role="alert"></div>
+                    </div>
+
+                    <div id="tab-hints" class="tab-pane">
+                        <h3 style="margin-top:0;">Available Hints</h3>
+                        <div id="ui-hints-container"></div>
+                        <button class="btn btn-ghost" id="btn-reveal-hint" style="width:100%; justify-content:center;">Reveal Next Hint</button>
+                    </div>
+
+                    <div id="tab-theory" class="tab-pane">
+                        <h3 style="margin-top:0;">Conceptual Deep Dive</h3>
+                        <div id="ui-theory-content">
+                            <p style="color: var(--text-secondary); font-style: italic;">Enable Teaching Mode or solve the challenge to unlock the theoretical breakdown and architecture diagrams.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="engine-panel">
+                <div id="quiz-container">
+                    <div class="quiz-question" id="quiz-q-text"></div>
+                    <div class="quiz-options" id="quiz-options-area"></div>
+                </div>
+
+                <div id="ide-container">
+                    <div class="ide-header">
+                        <span id="ui-filename">solution.js</span>
+                        <span>Env: <span style="color: var(--accent-teal);">Sandboxed</span></span>
+                    </div>
+                    <div id="editor-target" style="flex:1; display:flex; flex-direction:column;"></div>
+                    <div class="terminal-container" id="terminal" aria-live="polite"></div>
+                </div>
+
+                <div class="engine-footer">
+                    <div class="footer-left">
+                        <div class="timer-display" id="ui-timer" title="Scenario Timer">00:00</div>
+                    </div>
+                    <div class="footer-right">
+                        <button class="btn btn-ghost" style="color: #fff; border-color: #555;" id="btn-reset" title="Reset Code (Ctrl+R)">Reset</button>
+                        <button class="btn btn-primary" id="btn-submit" title="Execute Validation (Ctrl+Enter)">Execute Validation</button>
+                        <button class="btn btn-primary" id="btn-next" style="display:none;" title="Next Scenario (Ctrl+Enter)">Next Scenario ➔</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="results-view" class="view-section">
+            <div class="results-card glass">
+                <h1 style="margin: 0; color: var(--text-primary);">Assessment Finalized</h1>
+                <p style="color: var(--text-secondary); margin: 0; font-size: 16px;">Technical and Theoretical Competency Verified</p>
+                
+                <svg viewBox="0 0 36 36" class="circular-chart">
+                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path class="circle" id="ui-circle-fill" stroke="var(--accent-teal)" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <text x="18" y="20.35" class="percentage" id="ui-score">0%</text>
+                </svg>
+
+                <div class="performance-breakdown">
+                    <div class="perf-stat"><span class="perf-val" id="res-attempts">0</span><span class="perf-lbl">Total Attempts</span></div>
+                    <div class="perf-stat"><span class="perf-val" id="res-hints">0</span><span class="perf-lbl">Hints Used</span></div>
+                    <div class="perf-stat"><span class="perf-val" id="res-time">0m 0s</span><span class="perf-lbl">Time Taken</span></div>
+                </div>
+                
+                <div style="text-align: center; width: 100%; border-top: 1px solid var(--border-glass); padding-top: 20px; margin-top: 10px;">
+                    <h3 style="margin: 0 0 15px 0;">Earned Achievements</h3>
+                    <div class="badges-container" id="ui-badges"></div>
+                </div>
+
+                <div style="text-align: center; width: 100%; border-top: 1px solid var(--border-glass); padding-top: 20px; margin-top: 10px;">
+                    <h3 style="margin: 0 0 5px 0;">Recommended Certifications</h3>
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">Based on your performance in this track, consider pursuing:</p>
+                    <div class="cert-grid" id="ui-certs"></div>
+                </div>
+
+                <button class="btn btn-primary" id="btn-return-dash" style="margin-top: 20px;">Return to Dashboard</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        /**
+         * Tamheed Master Build Engine
+         * Expanded Scenarios, Certifications Engine, Flawless Scoring Logic
+         */
+
+        // --- DATA LAYER ---
+        const CERTIFICATIONS = {
+            network: [
+                { name: "Cisco CCNA", desc: "Validates foundational networking and routing skills." },
+                { name: "CompTIA Network+", desc: "Demonstrates baseline network defense and infrastructure readiness." }
+            ],
+            architecture: [
+                { name: "OSCP", desc: "Validates practical exploit development and vulnerability remediation." },
+                { name: "C/C++ Secure Coding", desc: "Proves competency in memory safety and architecture." }
+            ],
+            foundations: [
+                { name: "CISSP", desc: "Advanced validation of architectural security and risk design." },
+                { name: "CompTIA Security+", desc: "Validates fundamental security concepts and identity protocols." }
+            ]
+        };
+
+        const SCENARIOS = {
+            network: [
+                {
+                    type: "code", interactionMode: "fix-the-code", title: "BGP Route Hijacking Prevention", difficulty: "Advanced",
+                    desc: "The core enterprise router is accepting unverified Border Gateway Protocol (BGP) route advertisements from a newly provisioned peer, risking a routing hijack.",
+                    tasks: ["Review the BGP neighbor configuration.", "Implement route filtering using a prefix-list to restrict inbound advertisements to approved subnets only."],
+                    filename: "router_bgp.conf", mode: "nginx",
+                    initialCode: `router bgp 65000\n  neighbor 10.10.10.2 remote-as 65001\n  !\n  ! DANGER: Unfiltered inbound routing table\n  neighbor 10.10.10.2 route-map RM_INBOUND in\n\nroute-map RM_INBOUND permit 10\n  match ip address prefix-list PL_ALLOW_ALL\n\n! Update the prefix-list to only allow 192.168.0.0/16\nip prefix-list PL_ALLOW_ALL seq 5 permit 0.0.0.0/0 le 32`,
+                    vulnLineStart: 11, vulnLineEnd: 12,
+                    validator: (input) => /permit\s+192\.168\.0\.0\/16/i.test(input) && !/0\.0\.0\.0\/0/i.test(input),
+                    hints: ["Look at the `ip prefix-list` command at the bottom.", "The current rule permits `0.0.0.0/0` (everything). Change it to `192.168.0.0/16`."],
+                    theory: { concept: "BGP implicitly trusts advertised routes. Without strict filtering, an attacker can advertise superior routes, redirecting traffic (BGP Hijacking).", diagram: "", pitfalls: "Applying filters outbound instead of inbound, or forgetting the implicit deny.", enterpriseContext: "Missing route filters caused the famous 2008 YouTube BGP hijack." }
+                },
+                {
+                    type: "code", interactionMode: "fix-the-code", title: "OSPF Neighbor Authentication", difficulty: "Medium",
+                    desc: "Router 1 is establishing OSPF neighbor adjacency in cleartext, leaving the routing table vulnerable to injection attacks from rogue devices.",
+                    tasks: ["Review the interface configuration.", "Apply MD5 authentication to the OSPF interface to secure route exchanges."],
+                    filename: "ospf_auth.conf", mode: "nginx",
+                    initialCode: `interface GigabitEthernet0/0\n  ip address 10.0.0.1 255.255.255.0\n  ! Enable OSPF MD5 Authentication below\n  ip ospf authentication-key secretpass\n!\nrouter ospf 1\n  network 10.0.0.0 0.0.0.255 area 0`,
+                    vulnLineStart: 4, vulnLineEnd: 4,
+                    validator: (input) => /message-digest/i.test(input),
+                    hints: ["`authentication-key` sends passwords in cleartext.", "Replace it with `ip ospf message-digest-key 1 md5 secretpass` to use MD5 hashes."],
+                    theory: { concept: "Cleartext authentication allows attackers sniffing the wire to capture routing passwords. Message-Digest (MD5) hashes the password, ensuring rogue routers cannot hijack the routing table.", pitfalls: "Forgetting to enable `area 0 authentication message-digest` globally under the OSPF process.", enterpriseContext: "OSPF spoofing allows attackers to become the Default Gateway, enabling massive Man-in-the-Middle (MitM) attacks." }
+                },
+                {
+                    type: "code", interactionMode: "fix-the-code", title: "Access Control List (ACL) Misconfiguration", difficulty: "Beginner",
+                    desc: "A newly deployed internal web application is completely inaccessible. The Edge Firewall is actively dropping the packets.",
+                    tasks: ["Review the Access Control List (ACL).", "Change the explicit deny rule on Port 443 to allow secure web traffic."],
+                    filename: "firewall.conf", mode: "nginx",
+                    initialCode: `# Edge Firewall Configuration\n# Rule Order: Top to Bottom\n\naccess-list 100 permit tcp any any eq 22\naccess-list 100 deny tcp any any eq 443\naccess-list 100 permit udp any any eq 53\naccess-list 100 deny ip any any`,
+                    vulnLineStart: 5, vulnLineEnd: 5,
+                    validator: (input) => /permit tcp any any eq 443/i.test(input),
+                    hints: ["Firewalls process top-down.", "Rule 443 explicitly denies HTTPS traffic. Change `deny` to `permit`."],
+                    theory: { concept: "Firewalls process top-down. Once a packet matches a rule, processing stops. A `deny` rule placed before a `permit` rule will irrevocably drop the traffic.", pitfalls: "Adding a permit rule at the bottom of the ACL, after an explicit or implicit deny all statement.", enterpriseContext: "ACL misconfigurations account for nearly 40% of unplanned enterprise network outages." }
+                }
+            ],
+            architecture: [
+                {
+                    type: "code", interactionMode: "fix-the-code", title: "Buffer Overflow Mitigation", difficulty: "Medium",
+                    desc: "A legacy component is vulnerable to a stack-based buffer overflow. Unsafe memory copying functions are used without bounds checking.",
+                    tasks: ["Locate the unsafe memory manipulation function.", "Replace it with a bounds-checked equivalent (e.g., strncpy)."],
+                    filename: "memory_mgr.c", mode: "javascript",
+                    initialCode: `#include <string.h>\n#include <stdio.h>\n\ntypedef struct {\n    int authLevel;\n    char username[16];\n} UserData;\n\nvoid processLogin(char *inputPayload) {\n    UserData user;\n    user.authLevel = 0;\n    \n    // VULNERABILITY: Unsafe memory copy\n    strcpy(user.username, inputPayload);\n    \n    if(user.authLevel == 1) {\n        printf("Admin Access Granted");\n    }\n}`,
+                    vulnLineStart: 13, vulnLineEnd: 14,
+                    validator: (input) => /strncpy\s*\(/i.test(input),
+                    hints: ["`strcpy` copies until it hits a null terminator.", "Use `strncpy` and specify the maximum length of the destination buffer (16)."],
+                    theory: { concept: "Standard copy functions do not check buffer lengths. If input exceeds buffer size, it overflows, overwriting adjacent variables (like authLevel) or execution pointers.", diagram: "", pitfalls: "Using `strncpy` without manually ensuring the last character is a null terminator.", enterpriseContext: "Buffer overflows remain a common CVE category in legacy systems, often leading directly to Remote Code Execution (RCE)." }
+                },
+                {
+                    type: "code", interactionMode: "fix-the-code", title: "Memory Leak Remediation", difficulty: "Advanced",
+                    desc: "A critical component of a high-performance signal processing engine is consuming exponential RAM, causing system crashes over time.",
+                    tasks: ["Analyze the C-style memory allocation.", "Ensure the dynamically allocated heap memory is properly released before the function returns."],
+                    filename: "signal_processor.c", mode: "javascript",
+                    initialCode: `void process_telemetry_signal(float* raw_data) {\n    // Allocate 1024 bytes on the heap for processing\n    float* buffer = (float*)malloc(1024 * sizeof(float));\n    \n    // Run expensive signal manipulation logic\n    execute_fast_fourier_transform(buffer, raw_data);\n    \n    // Send to output stream and exit\n    transmit(buffer);\n    return;\n}`,
+                    vulnLineStart: 9, vulnLineEnd: 10,
+                    validator: (input) => /free\s*\(\s*buffer\s*\)/i.test(input),
+                    hints: ["Memory allocated with `malloc` must be manually released.", "Use the `free()` function on the buffer right before the `return` statement."],
+                    theory: { concept: "In C/C++, the developer is responsible for manual memory management. If memory allocated on the heap is not freed, the application will slowly consume all available RAM until the OS kills the process (OOM Killer).", pitfalls: "Freeing memory and then trying to access it later (Use-After-Free vulnerability).", enterpriseContext: "Memory leaks in persistent systems (like routers or cloud daemons) degrade performance silently over months before causing sudden, catastrophic outages." }
+                },
+                {
+                    type: "code", interactionMode: "fix-the-code", title: "Format String Vulnerability", difficulty: "Medium",
+                    desc: "The system logging module passes raw user input directly to the `printf` function, allowing attackers to read internal memory addresses.",
+                    tasks: ["Locate the vulnerable `printf` statement.", "Explicitly define the format specifier (`%s`) so the function treats the input strictly as a string."],
+                    filename: "logger.c", mode: "javascript",
+                    initialCode: `void log_security_event(char* user_input) {\n    // Append event to security ledger\n    FILE *f = fopen("sec.log", "a");\n    \n    // VULNERABLE: Printing unsanitized input directly\n    printf(user_input);\n    \n    fprintf(f, "%s\\n", user_input);\n    fclose(f);\n}`,
+                    vulnLineStart: 5, vulnLineEnd: 6,
+                    validator: (input) => /printf\s*\(\s*"%s"\s*,\s*user_input\s*\)/i.test(input),
+                    hints: ["Passing variables directly into `printf` is dangerous.", "Change it to `printf(\"%s\", user_input);`"],
+                    theory: { concept: "If an attacker inputs format specifiers like `%x` or `%n` into a raw `printf` call, they can force the application to read or write directly to the stack, exposing secrets or crashing the app.", pitfalls: "Assuming input sanitization makes raw `printf` safe. Always strictly type the output format.", enterpriseContext: "Format string vulnerabilities are a classic vector used to bypass memory randomization (ASLR) in modern exploits." }
+                }
+            ],
+            foundations: [
+                {
+                    type: "mcq", title: "Cryptography Basics", difficulty: "Beginner",
+                    desc: "Assess your understanding of fundamental hashing algorithms used for password storage.",
+                    tasks: ["Select the hashing algorithm that is cryptographically broken and should never be used for secure data."],
+                    options: ["SHA-256", "MD5", "Argon2", "bcrypt"], correctAnswer: "MD5",
+                    hints: ["This algorithm produces a 128-bit hash value and is highly vulnerable to collision attacks."],
+                    theory: { concept: "MD5 is cryptographically broken and vulnerable to collision attacks. Modern password storage requires slow, salted hashing algorithms like Argon2 or bcrypt.", pitfalls: "Confusing encoding (Base64), encryption (AES), and hashing (SHA). Hashes are one-way.", enterpriseContext: "Flame malware used MD5 collision attacks to forge Windows digital certificates, bypassing enterprise trust boundaries." }
+                },
+                {
+                    type: "short-answer", title: "Access Control Models", difficulty: "Medium",
+                    desc: "Identify the correct access control paradigm based on enterprise deployment structures.",
+                    tasks: ["What access control model relies on security clearances (e.g., Top Secret) assigned to subjects and classification labels assigned to objects?"],
+                    correctAnswer: "MAC", acceptedRegex: /MAC|Mandatory Access Control/i,
+                    hints: ["It's heavily used by military and intelligence organizations.", "The acronym is MAC."],
+                    theory: { concept: "Mandatory Access Control (MAC) is centrally managed by the system administrator. Access is based strictly on clearance levels and labels, prohibiting users from altering object permissions.", pitfalls: "Implementing MAC in a commercial environment where Role-Based Access Control (RBAC) is more appropriate." }
+                },
+                {
+                    type: "mcq", title: "Zero Trust Architecture", difficulty: "Advanced",
+                    desc: "Evaluate your understanding of modern enterprise perimeter defense strategies.",
+                    tasks: ["Which of the following phrases best defines the core principle of Zero Trust Architecture?"],
+                    options: ["Trust but Verify", "Perimeter Defense Security", "Never Trust, Always Verify", "Implicit Trust Modeling"], correctAnswer: "Never Trust, Always Verify",
+                    hints: ["It assumes the network is already compromised.", "It removes the concept of an 'internal' trusted network."],
+                    theory: { concept: "Zero Trust Architecture assumes that threats exist both inside and outside the network. Therefore, no user or device is trusted implicitly, requiring strict identity verification for every resource access request.", diagram: "", pitfalls: "Believing that implementing a strong VPN equates to having a Zero Trust environment.", enterpriseContext: "Major tech companies like Google pioneered Zero Trust (BeyondCorp) to protect infrastructure without relying on traditional VPN firewalls." }
+                }
+            ]
+        };
+
+        // --- UTILS MODULE ---
+        const Utils = {
+            smoothScroll: (el) => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }),
+            shakeElement: (el) => {
+                el.classList.remove('shake-animation');
+                void el.offsetWidth; 
+                el.classList.add('shake-animation');
+            },
+            debounce: (func, wait) => {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => { clearTimeout(timeout); func(...args); };
+                    clearTimeout(timeout); timeout = setTimeout(later, wait);
+                };
+            }
+        };
+
+        // --- XP & METRICS ENGINE ---
+        const Metrics = {
+            xp: parseInt(localStorage.getItem('tamheed_xp') || '0', 10),
+            addXP: function(points) {
+                this.xp = Math.max(0, this.xp + points);
+                localStorage.setItem('tamheed_xp', this.xp);
+                document.getElementById('ui-xp-display').innerText = `${this.xp} XP`;
+            }
+        };
+
+        // --- APP ENGINE ---
+        const App = {
+            state: {
+                theme: 'light', isTeachingMode: false, currentTrack: null, currentIndex: 0,
+                score: 0, attempts: 0, hintsRevealed: 0, isProcessing: false,
+                currentScenarioCache: null, editorInstance: null,
+                sessionMetrics: { flawless: 0, hintsUsed: 0, totalAttempts: 0 },
+                timerInterval: null, secondsElapsed: 0, autoAdvanceTimer: null
+            },
+            DOM: {},
+
+            init: function() {
+                this.cacheDOM();
+                this.bindEvents();
+                Metrics.addXP(0); 
+                
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    this.DOM.themeToggle.checked = true;
+                    this.UI.toggleTheme();
+                }
+            },
+
+            cacheDOM: function() {
+                const $ = document.getElementById.bind(document);
+                this.DOM = {
+                    views: document.querySelectorAll('.view-section'),
+                    body: document.body, themeIcon: $('theme-icon'), themeToggle: $('theme-btn'),
+                    teachingToggle: $('teaching-toggle'), navDashboard: $('nav-dashboard'),
+                    
+                    // Left Panel
+                    progressFill: $('ui-progress'), progressContainer: $('ui-progress-container'),
+                    tabBtns: document.querySelectorAll('.tab-btn'), tabPanes: document.querySelectorAll('.tab-pane'),
+                    tabSlider: $('tab-slider'), btnTabTheory: $('btn-tab-theory'),
+                    title: $('ui-title'), desc: $('ui-desc'), tasks: $('ui-tasks'), difficulty: $('ui-difficulty'),
+                    teachingBadge: $('ui-teaching-badge'), feedbackBox: $('ui-feedback'),
+                    hintsContainer: $('ui-hints-container'), btnRevealHint: $('btn-reveal-hint'),
+                    theoryContent: $('ui-theory-content'), panelContentArea: $('panel-content-area'),
+                    
+                    // Right Panel
+                    ideContainer: $('ide-container'), quizContainer: $('quiz-container'),
+                    editorTarget: $('editor-target'), uiFilename: $('ui-filename'),
+                    terminal: $('terminal'), quizText: $('quiz-q-text'), quizOptionsArea: $('quiz-options-area'),
+                    
+                    // Footer Controls
+                    btnReset: $('btn-reset'), btnSubmit: $('btn-submit'), btnNext: $('btn-next'), timerDisplay: $('ui-timer'),
+                    
+                    // Results
+                    resultsScore: $('ui-score'), circleFill: $('ui-circle-fill'), badgesContainer: $('ui-badges'),
+                    resAttempts: $('res-attempts'), resHints: $('res-hints'), resTime: $('res-time'),
+                    certsContainer: $('ui-certs'), btnReturnDash: $('btn-return-dash')
+                };
+            },
+
+            bindEvents: function() {
+                document.querySelectorAll('.track-card').forEach(card => {
+                    card.addEventListener('click', (e) => this.ScenarioRenderer.initTrack(e.currentTarget.getAttribute('data-track')), {passive:true});
+                    card.addEventListener('keydown', (e) => { if(e.key === 'Enter') e.currentTarget.click(); });
+                });
+
+                this.DOM.themeToggle.addEventListener('click', () => this.UI.toggleTheme());
+                this.DOM.teachingToggle.addEventListener('change', () => this.UI.toggleTeachingMode());
+                this.DOM.navDashboard.addEventListener('click', () => this.UI.navigate('dashboard-view'));
+                
+                this.DOM.tabBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => this.UI.switchTab(e.currentTarget));
+                });
+
+                this.DOM.btnRevealHint.addEventListener('click', () => this.ScenarioRenderer.revealHint());
+                this.DOM.btnReset.addEventListener('click', () => {
+                    if (this.state.currentScenarioCache.type === 'code') {
+                        this.state.editorInstance.setValue(this.state.currentScenarioCache.initialCode);
+                        this.Terminal.log("[System] Workspace reverted to initial state.", 'warn');
+                    }
+                });
+                
+                this.DOM.btnSubmit.addEventListener('click', () => this.ValidationEngine.submit());
+                this.DOM.btnNext.addEventListener('click', () => this.ScenarioRenderer.nextScenario());
+                this.DOM.btnReturnDash.addEventListener('click', () => this.UI.navigate('dashboard-view'));
+
+                // Keyboard Shortcuts
+                document.addEventListener('keydown', (e) => {
+                    if (this.state.currentTrack === null) return;
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        if (this.DOM.btnSubmit.style.display !== 'none' && !this.DOM.btnSubmit.disabled) this.ValidationEngine.submit();
+                        else if (this.DOM.btnNext.style.display !== 'none') this.ScenarioRenderer.nextScenario();
+                    }
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'r' && this.DOM.btnReset.style.display !== 'none') {
+                        e.preventDefault();
+                        this.DOM.btnReset.click();
+                    }
+                });
+
+                const resizeObserver = new ResizeObserver(Utils.debounce(() => {
+                    if (this.state.editorInstance && this.DOM.ideContainer.style.display !== 'none') {
+                        this.state.editorInstance.refresh();
+                    }
+                }, 100));
+                resizeObserver.observe(this.DOM.editorTarget);
+            }
+        };
+
+        // --- UI MODULE ---
+        App.UI = {
+            toggleTheme: function() {
+                App.state.theme = App.state.theme === 'light' ? 'dark' : 'light';
+                App.DOM.body.setAttribute('data-theme', App.state.theme);
+                App.DOM.themeIcon.innerText = App.state.theme === 'light' ? '🌙' : '☀️';
+            },
+
+            toggleTeachingMode: function() {
+                App.state.isTeachingMode = App.DOM.teachingToggle.checked;
+                App.DOM.teachingBadge.style.display = App.state.isTeachingMode ? 'inline-block' : 'none';
+                
+                if (App.state.isTeachingMode) {
+                    App.DOM.btnTabTheory.disabled = false;
+                    App.DOM.btnTabTheory.innerText = "Theory 📖";
+                    if(App.state.currentTrack) this.populateTheory();
+                } else {
+                    App.DOM.btnTabTheory.disabled = true;
+                    App.DOM.btnTabTheory.innerText = "Theory 🔒";
+                    this.switchTab(App.DOM.tabBtns[0]); 
+                }
+            },
+
+            navigate: function(viewId) {
+                App.DOM.views.forEach(v => v.classList.remove('active'));
+                document.getElementById(viewId).classList.add('active');
+                App.DOM.navDashboard.style.display = viewId === 'dashboard-view' ? 'none' : 'block';
+                
+                if(viewId === 'dashboard-view') {
+                    App.state.currentTrack = null;
+                    App.Timer.stop();
+                } else if(viewId === 'workspace-view') {
+                    setTimeout(() => { if(App.state.editorInstance) App.state.editorInstance.refresh(); }, 50); 
+                }
+            },
+
+            switchTab: function(btnElement) {
+                if(btnElement.disabled) return;
+                App.DOM.tabBtns.forEach(b => b.classList.remove('active'));
+                App.DOM.tabPanes.forEach(p => p.classList.remove('active'));
+                
+                btnElement.classList.add('active');
+                document.getElementById(btnElement.getAttribute('data-tab')).classList.add('active');
+                
+                const idx = btnElement.getAttribute('data-idx');
+                App.DOM.tabSlider.style.transform = `translateX(${idx * 100}%)`;
+            },
+
+            populateTheory: function() {
+                const sc = App.state.currentScenarioCache;
+                if(!sc) return;
+                App.DOM.theoryContent.innerHTML = `
+                    <details class="theory-section" open>
+                        <summary>Core Concept</summary>
+                        <div class="theory-inner">${sc.theory.concept}</div>
+                    </details>
+                    ${sc.theory.diagram ? `<div class="theory-diagram">${sc.theory.diagram}</div>` : ''}
+                    <details class="theory-section">
+                        <summary>Common Pitfalls</summary>
+                        <div class="theory-inner">${sc.theory.pitfalls}</div>
+                    </details>
+                    ${sc.theory.enterpriseContext ? `
+                    <details class="theory-section">
+                        <summary>Enterprise Context</summary>
+                        <div class="theory-inner">🏢 ${sc.theory.enterpriseContext}</div>
+                    </details>` : ''}
+                `;
+            },
+
+            showFeedback: function(isCorrect, text) {
+                App.DOM.feedbackBox.style.display = 'block';
+                App.DOM.feedbackBox.className = `feedback-alert ${isCorrect ? 'success' : 'error'}`;
+                App.DOM.feedbackBox.innerHTML = `<strong>${isCorrect ? '✔ Validated:' : '✖ Error:'}</strong> ${text}`;
+                
+                if(!isCorrect) Utils.shakeElement(App.DOM.feedbackBox);
+                Utils.smoothScroll(App.DOM.panelContentArea);
+
+                if (isCorrect) {
+                    App.DOM.btnSubmit.style.display = 'none';
+                    App.DOM.btnNext.style.display = 'flex';
+                    App.DOM.btnReset.style.display = 'none';
+
+                    if(!App.state.isTeachingMode) {
+                        App.DOM.btnTabTheory.disabled = false;
+                        App.DOM.btnTabTheory.innerText = "Theory 📖 (Unlocked)";
+                        this.populateTheory();
+                    }
+                }
+            }
+        };
+
+        // --- TERMINAL MODULE ---
+        App.Terminal = {
+            clear: function() { App.DOM.terminal.innerHTML = ''; },
+            log: function(text, type = 'sys') {
+                return new Promise(resolve => {
+                    const div = document.createElement('div');
+                    div.className = `term-line t-${type}`;
+                    App.DOM.terminal.appendChild(div);
+
+                    let i = 0;
+                    const chunk = 5; 
+                    function typeText() {
+                        if (i < text.length) {
+                            div.innerText += text.substr(i, chunk);
+                            i += chunk;
+                            App.DOM.terminal.scrollTop = App.DOM.terminal.scrollHeight;
+                            requestAnimationFrame(typeText);
+                        } else {
+                            resolve();
+                        }
+                    }
+                    requestAnimationFrame(typeText);
+                });
+            }
+        };
+
+        // --- TIMER MODULE ---
+        App.Timer = {
+            start: function() {
+                clearInterval(App.state.timerInterval);
+                App.state.secondsElapsed = 0;
+                App.DOM.timerDisplay.style.display = 'block';
+                this.updateDisplay();
+                App.state.timerInterval = setInterval(() => {
+                    App.state.secondsElapsed++;
+                    this.updateDisplay();
+                }, 1000);
+            },
+            stop: function() {
+                clearInterval(App.state.timerInterval);
+                App.DOM.timerDisplay.style.display = 'none';
+            },
+            updateDisplay: function() {
+                const m = Math.floor(App.state.secondsElapsed / 60).toString().padStart(2, '0');
+                const s = (App.state.secondsElapsed % 60).toString().padStart(2, '0');
+                App.DOM.timerDisplay.innerText = `${m}:${s}`;
+            }
+        };
+
+        // --- SCENARIO RENDERER ---
+        App.ScenarioRenderer = {
+            initTrack: function(trackId) {
+                App.state.currentTrack = trackId;
+                App.state.currentIndex = 0;
+                App.state.score = 0; 
+                App.state.sessionMetrics = { flawless: 0, hintsUsed: 0, totalAttempts: 0 };
+                
+                if(!App.state.editorInstance) {
+                    App.state.editorInstance = CodeMirror(App.DOM.editorTarget, {
+                        mode: "javascript", theme: "dracula", lineNumbers: true, indentUnit: 4, matchBrackets: true, gutters: ["CodeMirror-linenumbers", "vuln-gutter"]
+                    });
+                }
+
+                App.Timer.start();
+                App.UI.navigate('workspace-view');
+                this.loadScenario();
+            },
+
+            loadScenario: function() {
+                clearTimeout(App.state.autoAdvanceTimer); 
+
+                const sc = SCENARIOS[App.state.currentTrack][App.state.currentIndex];
+                App.state.currentScenarioCache = sc;
+                App.state.attempts = 0;
+                App.state.hintsRevealed = 0;
+                
+                // Reset UI State for new scenario
+                App.DOM.feedbackBox.style.display = 'none';
+                App.DOM.btnSubmit.style.display = 'flex';
+                App.DOM.btnSubmit.disabled = false;
+                App.DOM.btnSubmit.innerText = "Execute Validation";
+                App.DOM.btnNext.style.display = 'none';
+                App.DOM.hintsContainer.innerHTML = '';
+                App.DOM.btnRevealHint.style.display = 'flex';
+                App.UI.switchTab(App.DOM.tabBtns[0]);
+                
+                if(!App.state.isTeachingMode) {
+                    App.DOM.btnTabTheory.disabled = true;
+                    App.DOM.btnTabTheory.innerText = "Theory 🔒";
+                    App.DOM.theoryContent.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">Solve the challenge to unlock the theoretical breakdown.</p>';
+                }
+
+                // Progress Bar Update
+                let pct = (App.state.currentIndex / SCENARIOS[App.state.currentTrack].length) * 100;
+                App.DOM.progressFill.style.width = `${pct}%`;
+                App.DOM.progressContainer.title = `${Math.round(pct)}% Completed`;
+
+                // Content Injection
+                App.DOM.title.innerText = sc.title;
+                App.DOM.desc.innerText = sc.desc;
+                App.DOM.tasks.innerHTML = sc.tasks.map(t => `<li>${t}</li>`).join('');
+                App.DOM.difficulty.innerText = sc.difficulty;
+                App.DOM.difficulty.className = `difficulty-tag ${sc.difficulty === 'Advanced' ? 'diff-hard' : sc.difficulty === 'Medium' ? 'diff-med' : 'diff-easy'}`;
+
+                if(App.state.isTeachingMode) App.UI.populateTheory();
+
+                // Interface Morphing based on scenario type
+                if (sc.type === 'code') {
+                    App.DOM.ideContainer.style.display = 'flex';
+                    App.DOM.quizContainer.style.display = 'none';
+                    App.DOM.btnReset.style.display = 'flex';
+                    App.DOM.uiFilename.innerText = sc.filename;
+                    
+                    App.state.editorInstance.setOption("mode", sc.mode);
+                    App.state.editorInstance.setValue(sc.initialCode);
+                    
+                    App.state.editorInstance.clearGutter("vuln-gutter");
+                    App.state.editorInstance.getAllMarks().forEach(m => m.clear());
+                    
+                    if(sc.interactionMode === "fix-the-code") {
+                        const marker = document.createElement("div");
+                        marker.innerHTML = "⚠️"; marker.style.color = "var(--accent-danger)"; marker.style.marginLeft = "-5px";
+                        App.state.editorInstance.setGutterMarker(sc.vulnLineStart - 1, "vuln-gutter", marker);
+                        App.state.editorInstance.markText(
+                            {line: sc.vulnLineStart - 1, ch: 0}, {line: sc.vulnLineEnd - 1, ch: null}, {className: "vuln-line-highlight"}
+                        );
+                    }
+                    
+                    setTimeout(() => { App.state.editorInstance.refresh(); }, 50);
+                    
+                    App.Terminal.clear();
+                    App.Terminal.log(`[TamheedOS] Sandboxing environment for ${sc.filename}...`, 'sys');
+                } else {
+                    App.DOM.ideContainer.style.display = 'none';
+                    App.DOM.quizContainer.style.display = 'block';
+                    App.DOM.btnReset.style.display = 'none';
+                    this.renderQuiz(sc);
+                }
+            },
+
+            renderQuiz: function(sc) {
+                App.DOM.quizText.innerText = sc.question || sc.desc;
+                App.DOM.quizOptionsArea.innerHTML = '';
+
+                if (sc.type === 'mcq') {
+                    sc.options.forEach((opt, i) => {
+                        const div = document.createElement('div');
+                        div.className = 'quiz-option';
+                        div.innerHTML = `<input type="radio" name="q_opt" id="opt${i}" value="${opt}"> <label for="opt${i}" style="flex:1; cursor:pointer;">${opt}</label>`;
+                        div.onclick = () => {
+                            if(App.state.isProcessing || document.querySelector('.quiz-option.locked')) return;
+                            document.querySelectorAll('.quiz-option').forEach(el => el.classList.remove('selected'));
+                            div.classList.add('selected');
+                            document.getElementById(`opt${i}`).checked = true;
+                        };
+                        App.DOM.quizOptionsArea.appendChild(div);
+                    });
+                } else if (sc.type === 'short-answer') {
+                    App.DOM.quizOptionsArea.innerHTML = `<input type="text" class="quiz-text-input" id="q_short_ans" placeholder="Type your answer here..." autocomplete="off">`;
+                    setTimeout(() => {
+                        document.getElementById('q_short_ans').addEventListener('keydown', (e) => {
+                            if(e.key === 'Enter') App.DOM.btnSubmit.click();
+                        });
+                    }, 50);
+                }
+            },
+
+            revealHint: function() {
+                const sc = App.state.currentScenarioCache;
+                if (App.state.hintsRevealed < sc.hints.length) {
+                    const hintHtml = `<div class="hint-box">💡 ${sc.hints[App.state.hintsRevealed]}</div>`;
+                    App.DOM.hintsContainer.insertAdjacentHTML('beforeend', hintHtml);
+                    
+                    App.state.hintsRevealed++;
+                    App.state.sessionMetrics.hintsUsed++;
+                    Metrics.addXP(-2);
+                    
+                    if (App.state.hintsRevealed >= sc.hints.length) {
+                        App.DOM.btnRevealHint.style.display = 'none';
+                    }
+                }
+            },
+
+            nextScenario: function() {
+                clearTimeout(App.state.autoAdvanceTimer); 
+                App.state.currentIndex++;
+                
+                if(App.state.currentIndex >= SCENARIOS[App.state.currentTrack].length) {
+                    this.finishTrack();
+                } else {
+                    this.loadScenario();
+                }
+            },
+
+            finishTrack: function() {
+                App.Timer.stop();
+                App.UI.navigate('results-view');
+                
+                const total = SCENARIOS[App.state.currentTrack].length;
+                const finalPct = Math.max(0, Math.min(100, Math.round((App.state.score / total) * 100))) || 0;
+                
+                // Populate Breakdown
+                App.DOM.resAttempts.innerText = App.state.sessionMetrics.totalAttempts;
+                App.DOM.resHints.innerText = App.state.sessionMetrics.hintsUsed;
+                const m = Math.floor(App.state.secondsElapsed / 60);
+                const s = App.state.secondsElapsed % 60;
+                App.DOM.resTime.innerText = `${m}m ${s}s`;
+                
+                setTimeout(() => {
+                    App.DOM.circleFill.style.strokeDasharray = `${finalPct}, 100`;
+                }, 100);
+
+                let start = null;
+                const duration = 1500;
+                const step = (timestamp) => {
+                    if (!start) start = timestamp;
+                    const progress = Math.min((timestamp - start) / duration, 1);
+                    const ease = 1 - Math.pow(1 - progress, 3);
+                    const currentVal = Math.floor(ease * finalPct);
+                    
+                    App.DOM.resultsScore.textContent = `${currentVal}%`; 
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        App.DOM.resultsScore.textContent = `${finalPct}%`; // Enforce final value
+                        if (finalPct >= 50) confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#13B4B7', '#2ecc71', '#0d2c4a'] });
+                        this.renderBadges();
+                        this.renderCerts(); // Added render certifications
+                    }
+                };
+                requestAnimationFrame(step);
+            },
+
+            renderBadges: function() {
+                App.DOM.badgesContainer.innerHTML = '';
+                let badges = [];
+                
+                if(App.state.sessionMetrics.flawless === SCENARIOS[App.state.currentTrack].length) badges.push("🎯 Flawless Execution");
+                if(App.state.sessionMetrics.hintsUsed === 0) badges.push("🧠 Independent Thinker");
+                if(App.state.isTeachingMode) badges.push("📚 Theory Master");
+                if(App.state.secondsElapsed < (SCENARIOS[App.state.currentTrack].length * 60)) badges.push("⚡ Speed Runner");
+                if(badges.length === 0) badges.push("✅ Track Completed");
+
+                badges.forEach((b, idx) => {
+                    const el = document.createElement('div');
+                    el.className = 'achievement-badge';
+                    el.innerText = b;
+                    el.style.animationDelay = `${idx * 0.15}s`;
+                    App.DOM.badgesContainer.appendChild(el);
+                });
+            },
+
+            // ADDED: Render Certifications
+            renderCerts: function() {
+                const certs = CERTIFICATIONS[App.state.currentTrack] || [];
+                App.DOM.certsContainer.innerHTML = certs.map(c => `
+                    <div class="cert-card">
+                        <h4>${c.name}</h4>
+                        <p>${c.desc}</p>
+                    </div>
+                `).join('');
+            }
+        };
+
+        // --- VALIDATION ENGINE ---
+        App.ValidationEngine = {
+            submit: async function() {
+                if(App.state.isProcessing) return;
+                const sc = App.state.currentScenarioCache;
+                
+                App.state.isProcessing = true;
+                App.state.attempts++;
+                App.state.sessionMetrics.totalAttempts++;
+                App.DOM.btnSubmit.disabled = true;
+                App.DOM.btnSubmit.innerText = "Evaluating...";
+
+                let isCorrect = false;
+
+                try {
+                    if (sc.type === 'code') {
+                        const code = App.state.editorInstance.getValue();
+                        await App.Terminal.log("> Executing static analysis and unit tests...", 'cmd');
+                        await new Promise(r => setTimeout(r, 400));
+                        
+                        isCorrect = sc.validator(code);
+                        
+                        if(isCorrect) await App.Terminal.log("[Compiler] ✔ PASS: Solution satisfies architectural requirements.", 'suc');
+                        else await App.Terminal.log("[Compiler] ✖ FAIL: Requirements not met. Review constraints.", 'err');
+                    } 
+                    else if (sc.type === 'mcq') {
+                        const selected = document.querySelector('input[name="q_opt"]:checked');
+                        if(selected) {
+                            isCorrect = (selected.value === sc.correctAnswer);
+                            document.querySelectorAll('.quiz-option').forEach(el => el.classList.add('locked'));
+                            selected.parentElement.classList.add(isCorrect ? 'correct-ans' : 'wrong-ans');
+                        }
+                    }
+                    else if (sc.type === 'short-answer') {
+                        const inputEl = document.getElementById('q_short_ans');
+                        const val = inputEl.value;
+                        inputEl.disabled = true;
+                        isCorrect = sc.acceptedRegex ? sc.acceptedRegex.test(val) : (val.trim().toLowerCase() === sc.correctAnswer.toLowerCase());
+                        if(isCorrect) inputEl.style.borderColor = 'var(--accent-green)';
+                        else inputEl.style.borderColor = 'var(--accent-danger)';
+                    }
+
+                    if(isCorrect) {
+                        if(App.state.attempts === 1) {
+                            App.state.sessionMetrics.flawless++;
+                            Metrics.addXP(5);
+                        }
+                        Metrics.addXP(10);
+                        
+                        App.state.score++; 
+                        
+                        App.UI.showFeedback(true, "Solution approved.");
+                        App.DOM.btnSubmit.innerText = "Execute Validation";
+                        
+                        if(sc.type !== 'code' && App.state.currentIndex < SCENARIOS[App.state.currentTrack].length - 1) {
+                           App.state.autoAdvanceTimer = setTimeout(() => {
+                               if(App.DOM.btnNext.style.display !== 'none') App.DOM.btnNext.click();
+                           }, 2000); 
+                        }
+                    } else {
+                        App.UI.showFeedback(false, "Incorrect. Check the hints tab if you require assistance.");
+                        setTimeout(() => {
+                            App.DOM.btnSubmit.style.display = 'flex';
+                            App.DOM.btnNext.style.display = 'none';
+                            App.DOM.btnReset.style.display = 'flex';
+                            App.DOM.feedbackBox.style.display = 'none';
+                            App.DOM.btnSubmit.disabled = false;
+                            App.DOM.btnSubmit.innerText = "Execute Validation";
+                            App.state.isProcessing = false;
+                            
+                            if(sc.type === 'mcq') document.querySelectorAll('.quiz-option').forEach(el => { el.classList.remove('locked', 'correct-ans', 'wrong-ans'); });
+                            if(sc.type === 'short-answer') {
+                                const inputEl = document.getElementById('q_short_ans');
+                                if(inputEl) { inputEl.disabled = false; inputEl.style.borderColor = 'var(--border-glass)'; }
+                            }
+                        }, 2000);
+                        return; 
+                    }
+                } catch(e) {
+                    console.error("Execution Engine Error:", e);
+                    App.DOM.btnSubmit.disabled = false;
+                    App.DOM.btnSubmit.innerText = "Execute Validation";
+                }
+                
+                App.state.isProcessing = false;
+            }
+        };
+
+        // Boot Application
+        document.addEventListener('DOMContentLoaded', () => App.init());
+    </script>
+</body>
+</html>
