@@ -168,6 +168,23 @@ body[data-theme="dark"] input,
 body[data-theme="dark"] select,
 body[data-theme="dark"] textarea {
   background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+body[data-theme="dark"] select option,
+body[data-theme="dark"] select optgroup {
+  background: #0b2338;
+  color: #FFFFFF;
+}
+
+body[data-theme="dark"] .jobs-filter-card select,
+body[data-theme="dark"] .company-role-form select,
+body[data-theme="dark"] .assessment-builder-card select,
+body[data-theme="dark"] .smart-profile-target-role select {
+  background: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 textarea {
