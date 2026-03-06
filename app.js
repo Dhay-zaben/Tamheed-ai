@@ -342,7 +342,6 @@
         route: this.parseRoute(),
         authResolved: false,
         cvUploadPending: false,
-        contactMenuOpen: false,
         servicesMenuOpen: false,
         assessmentInfoOpen: false,
         aiInterviewDrafts: {},
@@ -387,6 +386,12 @@
           minMatch: 0,
           skill: "all",
           remote: false
+        },
+        companyCandidateFilters: {
+          city: "all",
+          minReadiness: 0,
+          minYears: 0,
+          skill: "all"
         }
       };
       this.labInterval = null;
@@ -522,6 +527,7 @@
             badges: [...student.badges],
             planChecks: index === 0 ? [true, true, false, false] : [false, false, false, false],
             appliedJobs: [],
+            jobApplications: {},
             lab: {
               attempted: index === 1,
               passed: index === 1,
@@ -586,6 +592,10 @@
         badges: ["CV Verified", "Interview Ready", "Behavioral Ready", "SQL Debug Verified"],
         planChecks: [true, true, true, false],
         appliedJobs: ["job-1", "job-3"],
+        jobApplications: {
+          "job-1": { status: "review", updatedAt: new Date().toISOString() },
+          "job-3": { status: "submitted", updatedAt: new Date().toISOString() }
+        },
         lab: { attempted: true, passed: true, answerId: "a" },
         behavior: { completed: true, scores: { communication: 5, empathy: 4, problem: 4 } },
         interview: { completed: true, score: 88 }
@@ -616,13 +626,33 @@
           badges: [],
           planChecks: [false, false, false, false],
           appliedJobs: [],
+          jobApplications: {},
           lab: { attempted: false, passed: false, answerId: null },
           behavior: { completed: false, scores: null },
           interview: { completed: false, score: 0 }
         };
         this.persistProgress();
       }
+      this.normalizeProgressRecord(this.state.progress[user.id]);
       return this.state.progress[user.id];
+    }
+
+    normalizeProgressRecord(progress) {
+      if (!progress) return;
+      if (!Array.isArray(progress.appliedJobs)) {
+        progress.appliedJobs = [];
+      }
+      if (!progress.jobApplications || typeof progress.jobApplications !== "object") {
+        progress.jobApplications = {};
+      }
+      progress.appliedJobs.forEach((jobId) => {
+        if (!progress.jobApplications[jobId]) {
+          progress.jobApplications[jobId] = {
+            status: "submitted",
+            updatedAt: new Date().toISOString()
+          };
+        }
+      });
     }
 
     persistAccounts() {
@@ -682,6 +712,7 @@
 
     setToast(message) {
       this.state.toast = message;
+      this.render();
       clearTimeout(this.toastTimer);
       this.toastTimer = window.setTimeout(() => {
         this.state.toast = "";
@@ -1363,7 +1394,7 @@
           this.state.session = null;
           this.state.authResolved = true;
           this.persistSession();
-          const protectedRoute = new Set(["student-dashboard", "upload", "jobs", "job", "plan", "behavior", "interview", "profile", "company-dashboard", "candidate", "candidates", "assessments"]);
+          const protectedRoute = new Set(["student-dashboard", "upload", "jobs", "job", "plan", "interview", "profile", "company-dashboard", "candidate", "candidates", "assessments"]);
           if (protectedRoute.has(this.state.route.name)) {
             this.go("/login");
           } else {
@@ -1442,12 +1473,11 @@
     bindGlobalEvents() {
       window.addEventListener("hashchange", () => {
         this.state.route = this.parseRoute();
-        this.state.contactMenuOpen = false;
         this.state.servicesMenuOpen = false;
         
         // Reset CV analysis display when navigating away from upload page (page refresh behavior)
         // Keep it saved in Firestore, but clear transient state for fresh analysis view
-        if (this.state.route !== "/upload-cv" && this.state.route !== "/cv") {
+        if (this.state.route.name !== "upload") {
           this.state.cvStatusMessage = "";
         }
         
@@ -1455,9 +1485,7 @@
       });
 
       document.addEventListener("click", (event) => {
-        if ((this.state.contactMenuOpen && !event.target.closest("[data-contact-menu]"))
-          || (this.state.servicesMenuOpen && !event.target.closest("[data-services-menu]"))) {
-          this.state.contactMenuOpen = false;
+        if (this.state.servicesMenuOpen && !event.target.closest("[data-services-menu]")) {
           this.state.servicesMenuOpen = false;
           this.render();
           return;
@@ -1466,9 +1494,9 @@
         const navTarget = event.target.closest("[data-nav]");
         if (navTarget) {
           event.preventDefault();
-          this.state.contactMenuOpen = false;
           this.state.servicesMenuOpen = false;
-          this.go(navTarget.dataset.nav);
+          const route = navTarget.dataset.nav || navTarget.getAttribute("href") || "/";
+          this.go(route);
           return;
         }
 
@@ -1491,6 +1519,9 @@
         }
         if (event.target.matches("[data-filter]")) {
           this.handleFilterChange(event.target);
+        }
+        if (event.target.matches("[data-company-filter]")) {
+          this.handleCompanyFilterChange(event.target);
         }
         if (event.target.matches("[data-plan-check]")) {
           this.handlePlanCheck(event.target);
@@ -1573,6 +1604,16 @@
       this.render();
     }
 
+    handleCompanyFilterChange(input) {
+      const key = input.dataset.companyFilter;
+      if (key === "minReadiness" || key === "minYears") {
+        this.state.companyCandidateFilters[key] = Number(input.value);
+      } else {
+        this.state.companyCandidateFilters[key] = input.value;
+      }
+      this.render();
+    }
+
     handlePlanCheck(input) {
       const progress = this.currentProgress();
       if (!progress) return;
@@ -1587,7 +1628,6 @@
       const progress = this.currentProgress();
 
       if (action === "logout") {
-        this.state.contactMenuOpen = false;
         this.state.servicesMenuOpen = false;
         this.logoutUser().catch(() => {
           this.state.formErrors = {
@@ -1598,16 +1638,24 @@
         return;
       }
 
-      if (action === "toggle-contact-menu") {
-        this.state.contactMenuOpen = !this.state.contactMenuOpen;
-        this.state.servicesMenuOpen = false;
+      if (action === "toggle-services-menu") {
+        this.state.servicesMenuOpen = !this.state.servicesMenuOpen;
         this.render();
         return;
       }
 
-      if (action === "toggle-services-menu") {
-        this.state.servicesMenuOpen = !this.state.servicesMenuOpen;
-        this.state.contactMenuOpen = false;
+      if (action.startsWith("choose-plan|")) {
+        const planKey = action.split("|")[1];
+        if (!user) {
+          this.go("/register");
+          return;
+        }
+        const labelMap = { starter: "Starter", pro: "Pro", enterprise: "Enterprise" };
+        const planLabel = labelMap[planKey] || planKey;
+        user.selectedPlan = planKey;
+        user.selectedPlanAt = new Date().toISOString();
+        this.persistAccounts();
+        this.showToast(this.state.settings.language === "ar" ? `تم اختيار خطة ${planLabel}` : `${planLabel} plan selected`);
         this.render();
         return;
       }
@@ -1754,12 +1802,15 @@
           return;
         }
 
-        if (!progress.appliedJobs.includes(jobId)) {
-          progress.appliedJobs.push(jobId);
-          this.persistProgress();
+        const currentStatus = this.getApplicationStatus(progress, jobId);
+        if (currentStatus === "none") {
+          this.setApplicationStatus(progress, jobId, "submitted");
+        } else if (currentStatus === "submitted") {
+          this.setApplicationStatus(progress, jobId, "review");
         }
+        this.persistProgress();
         this.state.jobCvStatusMessage = "";
-        window.alert(this.state.settings.language === "ar" ? "تم تسجيل التقديم بنجاح" : "Application saved successfully");
+        this.showToast(this.state.settings.language === "ar" ? "تم تسجيل التقديم بنجاح" : "Application saved successfully");
         this.render();
         return;
       }
@@ -1869,7 +1920,7 @@
         if (!progress || progress.lab.attempted) return;
         const lab = DATA.labs[0];
         if (!this.state.labDraftAnswer) {
-          window.alert(this.state.settings.language === "ar" ? "اختر إجابة أولاً" : "Select an answer first");
+          this.showToast(this.state.settings.language === "ar" ? "اختر إجابة أولاً" : "Select an answer first");
           return;
         }
         clearInterval(this.labInterval);
@@ -1889,7 +1940,7 @@
       if (action === "submit-behavior") {
         if (!progress || progress.behavior.completed) return;
         if (!this.state.behaviorDraftAnswer) {
-          window.alert(this.state.settings.language === "ar" ? "اختر رداً" : "Choose a response");
+          this.showToast(this.state.settings.language === "ar" ? "اختر رداً" : "Choose a response");
           return;
         }
         const scenarios = this.getBehaviorScenarios();
@@ -2008,82 +2059,7 @@
         this.loadBehavioralQuestions();
         return;
       }
-if (action === "start-mic") {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-          alert("عذراً، متصفحك لا يدعم المايكروفون.");
-          return;
-        }
-        const recognition = new SpeechRecognition();
-        
-        // FLAWLESS EXECUTION: Automatically syncs Mic language to App language!
-        recognition.lang = this.state.settings.language === "ar" ? 'ar-SA' : 'en-US'; 
-        
-        recognition.onresult = (event) => {
-          const text = event.results[0][0].transcript;
-          const currentText = this.state.aiInterviewDrafts[this.state.aiInterviewIndex] || "";
-          // Adds your spoken words cleanly
-          this.state.aiInterviewDrafts[this.state.aiInterviewIndex] = (currentText + " " + text).trim();
-          this.render(); 
-        };
-        
-        recognition.start();
-        this.showToast(this.state.settings.language === "ar" ? "🎤 جاري الاستماع... تحدث الآن" : "🎤 Listening... speak now");
-        return;
-      }
-
-    if (action === "read-question") {
-        const currentQ = DATA.interviewQuestions[this.state.aiInterviewIndex];
-        const isAr = this.state.settings.language === "ar";
-        const textToRead = isAr ? currentQ.qAr : currentQ.qEn;
-        
-        window.speechSynthesis.cancel(); // Stop any current speech
-        const msg = new SpeechSynthesisUtterance(textToRead);
-        
-        // Force language
-        msg.lang = isAr ? 'ar-SA' : 'en-US'; 
-        
-        // VOICE TUNING: Slower rate and lower pitch makes Arabic sound much less robotic
-        msg.rate = isAr ? 0.85 : 0.95; 
-        msg.pitch = isAr ? 0.9 : 1.0; 
-        
-        // Advanced Premium Voice Hunter (waits for voices to load)
-        const findAndSpeak = () => {
-           let voices = window.speechSynthesis.getVoices();
-           
-           // Priority 1: Look for Neural, Natural, or Premium voices (Edge/Mac)
-           let bestVoice = voices.find(v => 
-               v.lang.includes(isAr ? 'ar' : 'en') && 
-               (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Siri') || v.name.includes('Premium'))
-           );
-           
-           // Priority 2: Look for Google's specific voices
-           if (!bestVoice) {
-               bestVoice = voices.find(v => v.lang.includes(isAr ? 'ar' : 'en') && v.name.includes('Google'));
-           }
-
-           // Priority 3: Fallback to ANY available voice for that language
-           if (!bestVoice) {
-               bestVoice = voices.find(v => v.lang.includes(isAr ? 'ar' : 'en'));
-           }
-
-           if (bestVoice) {
-               msg.voice = bestVoice;
-           }
-
-           window.speechSynthesis.speak(msg);
-        };
-
-        // Hackathon fix: Browsers sometimes take a second to load voices. If empty, wait for them.
-        if (window.speechSynthesis.getVoices().length === 0) {
-            window.speechSynthesis.onvoiceschanged = findAndSpeak;
-        } else {
-            findAndSpeak();
-        }
-        
-        return;
-      }
-     if (action === "start-mic") {
+      if (action === "start-mic") {
         if (this.state.micActive) {
            if(window._activeRecognition) window._activeRecognition.stop();
            this.state.micActive = false;
@@ -2093,7 +2069,7 @@ if (action === "start-mic") {
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          alert(this.state.settings.language === "ar" ? "المتصفح لا يدعم المايكروفون. استخدم Chrome." : "Browser doesn't support microphone. Use Chrome.");
+          this.showToast(this.state.settings.language === "ar" ? "المتصفح لا يدعم المايكروفون. استخدم Chrome." : "Browser doesn't support microphone. Use Chrome.");
           return;
         }
         
@@ -2168,7 +2144,7 @@ if (action === "start-mic") {
 
         const answer = (this.state.aiInterviewDrafts[this.state.aiInterviewIndex] || "").trim();
         if (!answer) {
-          window.alert(this.state.settings.language === "ar" ? "يرجى التحدث للإجابة أولاً" : "Please speak your answer first");
+          this.showToast(this.state.settings.language === "ar" ? "يرجى التحدث للإجابة أولاً" : "Please speak your answer first");
           return;
         }
         
@@ -2258,8 +2234,30 @@ if (action === "start-mic") {
         const candidateId = target.dataset.candidateId;
         if (candidateId) {
           this.markCandidateInvited(candidateId);
+          const candidateProgress = this.state.progress[candidateId];
+          if (candidateProgress && Array.isArray(candidateProgress.appliedJobs)) {
+            candidateProgress.appliedJobs.forEach((jobId) => {
+              this.setApplicationStatus(candidateProgress, jobId, "interview_invited");
+            });
+            this.persistProgress();
+          }
         }
-        window.alert(this.state.settings.language === "ar" ? "تم إرسال الدعوة للمقابلة" : "Interview invite sent");
+        this.showToast(this.state.settings.language === "ar" ? "تم إرسال الدعوة للمقابلة" : "Interview invite sent");
+        this.render();
+        return;
+      }
+
+      if (action === "set-application-status") {
+        const candidateId = target.dataset.candidateId;
+        const status = target.dataset.status;
+        if (!candidateId || !status) return;
+        const candidateProgress = this.state.progress[candidateId];
+        if (!candidateProgress || !Array.isArray(candidateProgress.appliedJobs)) return;
+        candidateProgress.appliedJobs.forEach((jobId) => {
+          this.setApplicationStatus(candidateProgress, jobId, status);
+        });
+        this.persistProgress();
+        this.showToast(this.state.settings.language === "ar" ? "تم تحديث حالة الطلبات" : "Application statuses updated");
         this.render();
         return;
       }
@@ -2414,6 +2412,7 @@ if (action === "start-mic") {
               badges: [],
               planChecks: [false, false, false, false],
               appliedJobs: [],
+              jobApplications: {},
               lab: { attempted: false, passed: false, answerId: null },
               behavior: { completed: false, scores: null },
               interview: { completed: false, score: 0 }
@@ -2439,8 +2438,10 @@ if (action === "start-mic") {
           .split(",")
           .map((item) => item.trim())
           .filter(Boolean);
+        const companyUser = this.currentUser();
         const roleReq = {
           id: uid("role"),
+          companyName: String(data.get("companyName") || companyUser.companyName || companyUser.name || ""),
           title: String(data.get("title") || ""),
           requiredSkills,
           years: Number(data.get("years") || 0),
@@ -2515,6 +2516,53 @@ if (action === "start-mic") {
       if (!progress) return 0;
       const sum = progress.readinessParts.cv + progress.readinessParts.micro + progress.readinessParts.behavior + progress.readinessParts.plan;
       return clamp(Math.round(sum), 0, 100);
+    }
+
+    getReadinessBreakdown(userId) {
+      const progress = this.state.progress[userId];
+      if (!progress || !progress.readinessParts) {
+        return { cv: 0, micro: 0, behavior: 0, plan: 0 };
+      }
+      return {
+        cv: clamp(Math.round(progress.readinessParts.cv || 0), 0, 60),
+        micro: clamp(Math.round(progress.readinessParts.micro || 0), 0, 25),
+        behavior: clamp(Math.round(progress.readinessParts.behavior || 0), 0, 15),
+        plan: clamp(Math.round(progress.readinessParts.plan || 0), 0, 10)
+      };
+    }
+
+    getApplicationStatus(progress, jobId) {
+      this.normalizeProgressRecord(progress);
+      if (!progress || !jobId) return "none";
+      if (!progress.appliedJobs.includes(jobId)) return "none";
+      const explicitStatus = progress.jobApplications[jobId] && progress.jobApplications[jobId].status;
+      if (explicitStatus) return explicitStatus;
+      return "submitted";
+    }
+
+    setApplicationStatus(progress, jobId, status) {
+      if (!progress || !jobId || !status) return;
+      this.normalizeProgressRecord(progress);
+      if (!progress.appliedJobs.includes(jobId)) {
+        progress.appliedJobs.push(jobId);
+      }
+      progress.jobApplications[jobId] = {
+        status,
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    applicationStatusLabel(status) {
+      const isAr = this.state.settings.language === "ar";
+      const map = {
+        none: isAr ? "غير مقدم" : "Not applied",
+        submitted: isAr ? "تم التقديم" : "Submitted",
+        review: isAr ? "قيد الفرز" : "Screening",
+        interview_invited: isAr ? "دعوة مقابلة" : "Interview invited",
+        rejected: isAr ? "مرفوض" : "Rejected",
+        accepted: isAr ? "تم القبول" : "Accepted"
+      };
+      return map[status] || map.none;
     }
 
     async fetchRealJobs(role = "Frontend Developer", location = "Saudi Arabia") {
@@ -2980,12 +3028,15 @@ if (action === "start-mic") {
         return roleLabel === targetRole || roleLabel.includes(targetRole) || targetRole.includes(roleLabel);
       }) || matches[0];
       if (!targetMatch) return [];
+      const isAr = this.state.settings.language === "ar";
       return targetMatch.missingSkills.map((skill, index) => ({
         skill,
         current: index === 0 ? "20%" : "35%",
         target: "85%",
-        priority: index === 0 ? "High" : "Medium",
-        impact: index === 0 ? "+12 readiness" : "+7 readiness"
+        priority: index === 0 ? (isAr ? "عالية" : "High") : (isAr ? "متوسطة" : "Medium"),
+        impact: index === 0
+          ? (isAr ? "+12 للجاهزية" : "+12 readiness")
+          : (isAr ? "+7 للجاهزية" : "+7 readiness")
       }));
     }
 
@@ -3155,27 +3206,38 @@ if (action === "start-mic") {
       });
     }
 
+    getFilteredCandidates(ranked) {
+      const f = this.state.companyCandidateFilters || { city: "all", minReadiness: 0, minYears: 0, skill: "all" };
+      return ranked.filter((entry) => {
+        const cityPass = f.city === "all" || (entry.student.city || "") === f.city;
+        const readinessPass = entry.readiness >= Number(f.minReadiness || 0);
+        const yearsPass = Number(entry.student.experience || 0) >= Number(f.minYears || 0);
+        const skillPass = f.skill === "all" || (entry.student.topSkills || []).some((skill) => skill === f.skill);
+        return cityPass && readinessPass && yearsPass && skillPass;
+      });
+    }
+
     topBar() {
       const user = this.currentUser();
       const isPublic = !user;
-      const showLandingMixedNav = Boolean(user && this.state.route.name === "landing");
       const navClass = isPublic ? "topnav" : "topnav auth-nav";
+      const navActive = (name) => this.state.route.name === name ? "active" : "";
       const serviceLinks = user
         ? (user.role === "student"
           ? [
+              ["/student-dashboard", this.t("dashboard")],
               ["/upload", this.t("uploadCv")],
               ["/jobs", this.t("jobs")],
               ["/plan", this.t("plan")],
               ["/market-shift", this.state.settings.language === "ar" ? "توقعات السوق" : "Market Shift Predictor"],
               ["/micro-labs-test", this.state.settings.language === "ar" ? "مختبر المهارات" : "Micro Labs Test"],
-              ["/behavior", this.state.settings.language === "ar" ? "محاكاة سلوكية" : "Behavioral Simulation"],
               ["/interview", this.t("interview")]
             ]
           : [
+              ["/company-dashboard", this.t("dashboard")],
               ["/market-shift", this.state.settings.language === "ar" ? "توقعات السوق" : "Market Shift Predictor"],
               ["/candidates", this.t("candidates")],
-              ["/assessments", this.t("assessments")],
-              ["/contact", this.t("settings")]
+              ["/assessments", this.t("assessments")]
             ])
         : [];
       return `
@@ -3185,49 +3247,24 @@ if (action === "start-mic") {
               <img class="brand-logo light-logo" src="./assets/logo.PNG" alt="${this.t("brand")}">
               <img class="brand-logo dark-logo" src="./assets/Dark-Logo.png" alt="${this.t("brand")}">
             </button>
-            ${user && user.role === "student" ? `<button class="btn btn-ghost" data-nav="/profile">${this.t("profile")}</button>` : ""}
+            ${user && user.role === "student" ? `<button class="btn btn-ghost ${navActive("profile")}" data-nav="/profile">${this.t("profile")}</button>` : ""}
             <nav class="${navClass}">
-            ${isPublic || showLandingMixedNav ? `
-              <button data-nav="/">${this.t("navHome")}</button>
-              <button data-nav="/plans">${this.t("navPlans")}</button>
-              <button data-nav="/about">${this.t("navAbout")}</button>
-              <div class="contact-menu ${this.state.contactMenuOpen ? "open" : ""}" data-contact-menu>
-                <button class="contact-trigger" data-action="toggle-contact-menu">
-                  <span>${this.t("navContact")}</span>
-                  <span class="contact-trigger-arrow" aria-hidden="true"></span>
-                </button>
-                <div class="contact-dropdown">
-                  <div class="contact-dropdown-item">
-                    <small>Email</small>
-                    <strong>hello@tamheed.demo</strong>
-                  </div>
-                  <div class="contact-dropdown-item">
-                    <small>${this.state.settings.language === "ar" ? "الموقع" : "Location"}</small>
-                    <strong>Riyadh, Saudi Arabia</strong>
-                  </div>
-                </div>
-              </div>
-              ${showLandingMixedNav ? `<button data-nav="${user.role === "student" ? "/student-dashboard" : "/company-dashboard"}">${this.t("dashboard")}</button>` : ""}
-              ${showLandingMixedNav ? `
-                <div class="services-menu ${this.state.servicesMenuOpen ? "open" : ""}" data-services-menu>
-                  <button class="services-trigger" data-action="toggle-services-menu">
-                    <span>${this.state.settings.language === "ar" ? "الخدمات" : "Services"}</span>
-                    <span class="services-trigger-arrow" aria-hidden="true"></span>
-                  </button>
-                  <div class="services-dropdown">
-                    ${serviceLinks.map(([route, label]) => `<button class="services-dropdown-item" data-nav="${route}">${label}</button>`).join("")}
-                  </div>
-                </div>
-              ` : ""}
+            ${isPublic ? `
+              <button class="${navActive("plans")}" data-nav="/plans">${this.t("navPlans")}</button>
+              <button class="${navActive("about")}" data-nav="/about">${this.t("navAbout")}</button>
             ` : `
-              <button data-nav="${user.role === "student" ? "/student-dashboard" : "/company-dashboard"}">${this.t("dashboard")}</button>
+              <button class="${navActive("plans")}" data-nav="/plans">${this.t("navPlans")}</button>
+              <button class="${navActive("about")}" data-nav="/about">${this.t("navAbout")}</button>
               <div class="services-menu ${this.state.servicesMenuOpen ? "open" : ""}" data-services-menu>
                 <button class="services-trigger" data-action="toggle-services-menu">
                   <span>${this.state.settings.language === "ar" ? "الخدمات" : "Services"}</span>
                   <span class="services-trigger-arrow" aria-hidden="true"></span>
                 </button>
                 <div class="services-dropdown">
-                  ${serviceLinks.map(([route, label]) => `<button class="services-dropdown-item" data-nav="${route}">${label}</button>`).join("")}
+                  ${serviceLinks.map(([route, label]) => {
+                    const routeName = String(route).replace(/^\//, "").split("/")[0];
+                    return `<button class="services-dropdown-item ${navActive(routeName)}" data-nav="${route}">${label}</button>`;
+                  }).join("")}
                 </div>
               </div>
             `}
@@ -3382,47 +3419,162 @@ if (action === "start-mic") {
             <p>${this.state.settings.language === "ar" ? "رفع قابلية التوظيف، تسريع المواءمة بين التعليم وسوق العمل، وتمكين المواهب الرقمية الوطنية." : "Improving employability, tightening education-to-market alignment, and enabling local digital talent."}</p>
           </article>
         </section>
-        <section class="landing-footer-panel glass">
-          <div class="landing-footer-head">
-            <h3>${this.state.settings.language === "ar" ? "كل ما تحتاجه لتطوير مستقبلك في منصة واحدة" : "Everything you need to develop your future in one platform"}</h3>
+      `;
+    }
+
+    siteFooter() {
+      if (this.state.settings.language === "ar") {
+        return `
+          <footer class="site-footer">
+            <div class="site-footer-links">
+              <a href="/contact" data-nav="/contact">تواصل معنا</a>
+              <span class="footer-sep">|</span>
+              <a href="/faq" data-nav="/faq">الأسئلة الشائعة</a>
+              <span class="footer-sep">|</span>
+              <a href="/privacy" data-nav="/privacy">الخصوصية</a>
+              <span class="footer-sep">|</span>
+              <a href="/terms" data-nav="/terms">الشروط والأحكام</a>
+            </div>
+          </footer>
+        `;
+      }
+      return `
+        <footer class="site-footer">
+          <div class="site-footer-links">
+            <a href="/contact" data-nav="/contact">Contact Us</a>
+            <span class="footer-sep">|</span>
+            <a href="/faq" data-nav="/faq">FAQ</a>
+            <span class="footer-sep">|</span>
+            <a href="/privacy" data-nav="/privacy">Privacy</a>
+            <span class="footer-sep">|</span>
+            <a href="/terms" data-nav="/terms">Terms & Conditions</a>
           </div>
-          <div class="landing-image-grid">
-            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 1" : "Image 1"}</div>
-            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 2" : "Image 2"}</div>
-            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 3" : "Image 3"}</div>
-            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 4" : "Image 4"}</div>
-            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 5" : "Image 5"}</div>
-            <div class="landing-image-slot">${this.state.settings.language === "ar" ? "صورة 6" : "Image 6"}</div>
-          </div>
-        </section>
+        </footer>
       `;
     }
 
     plansPage() {
+      const user = this.currentUser();
+      const selectedPlan = (user && user.selectedPlan) || "";
+      const isAr = this.state.settings.language === "ar";
       return `
-        <section class="page-head">
-          <h1>${this.state.settings.language === "ar" ? "خطط تمهيد" : "Tamheed Plans"}</h1>
-          <p>${this.state.settings.language === "ar" ? "هيكل تسعير تجريبي لعرض القيمة." : "Prototype pricing architecture to show value."}</p>
+        <section class="pricing-hero">
+          <div class="pricing-hero-copy">
+            <span class="pricing-kicker">${isAr ? "خطط واضحة بدون تعقيد" : "Simple plans, clear value"}</span>
+            <h1>${isAr ? "اختر الخطة المناسبة لمسارك" : "Choose the plan that fits your path"}</h1>
+            <p>${isAr ? "سواء كنت طالباً تبحث عن أول فرصة، أو شركة تريد فرزاً أدق للمرشحين، تمهيد يقدم لك خطة مناسبة مع أدوات جاهزة للتنفيذ." : "Whether you are a student targeting your first role or a company seeking sharper screening, Tamheed gives you a plan with execution-ready tools."}</p>
+            ${user ? `<div class="pricing-current-plan"><strong>${isAr ? "الخطة الحالية:" : "Current plan:"}</strong> ${selectedPlan ? selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1) : (isAr ? "لم يتم الاختيار بعد" : "Not selected yet")}</div>` : ""}
+            <div class="pricing-hero-metrics">
+              <div>
+                <strong>+40%</strong>
+                <small>${isAr ? "متوسط تحسن الجاهزية" : "Average readiness uplift"}</small>
+              </div>
+              <div>
+                <strong>3x</strong>
+                <small>${isAr ? "سرعة أوضح في الفرز" : "Faster screening clarity"}</small>
+              </div>
+              <div>
+                <strong>100%</strong>
+                <small>${isAr ? "مسار تطوير عملي" : "Actionable development flow"}</small>
+              </div>
+            </div>
+          </div>
         </section>
-        <section class="cards three-up">
-          <article class="plan-card">
-            <span class="badge-soft">${this.state.settings.language === "ar" ? "للأفراد" : "For Individuals"}</span>
-            <h3>${this.state.settings.language === "ar" ? "Starter" : "Starter"}</h3>
-            <strong>49 SAR</strong>
-            <p>${this.state.settings.language === "ar" ? "تحليل سيرة + 1 مختبر + خطة 4 أسابيع" : "CV scan + 1 lab + 4-week plan"}</p>
+
+        <section class="pricing-grid">
+          <article class="pricing-card">
+            <span class="pricing-pill">${isAr ? "للأفراد" : "Individuals"}</span>
+            <h3>Starter</h3>
+            <p class="pricing-price">49 <span>SAR</span></p>
+            <p class="pricing-desc">${isAr ? "بداية عملية لفهم مستواك المهني." : "A practical start to understand your career baseline."}</p>
+            <ul class="pricing-feature-list">
+              <li>${isAr ? "تحليل سيرة ذاتية واحد" : "1 CV analysis"}</li>
+              <li>${isAr ? "مطابقة حتى 5 وظائف" : "Up to 5 job matches"}</li>
+              <li>${isAr ? "خطة تطوير 4 أسابيع" : "4-week development plan"}</li>
+            </ul>
+            ${user
+              ? `<button class="btn ${selectedPlan === "starter" ? "btn-primary" : "btn-ghost"}" data-action="choose-plan|starter">${selectedPlan === "starter" ? (isAr ? "تم الاختيار" : "Selected") : (isAr ? "اختر Starter" : "Choose Starter")}</button>`
+              : `<button class="btn btn-ghost" data-nav="/register">${isAr ? "ابدأ الآن" : "Get started"}</button>`}
           </article>
-          <article class="plan-card featured">
-            <span class="badge-soft">${this.state.settings.language === "ar" ? "الأكثر طلباً" : "Most Popular"}</span>
-            <h3>${this.state.settings.language === "ar" ? "Pro" : "Pro"}</h3>
-            <strong>149 SAR</strong>
-            <p>${this.state.settings.language === "ar" ? "مطابقة وظائف + مقابلة ذكية + ملف ذكي" : "Job matching + smart interview + smart profile"}</p>
+
+          <article class="pricing-card pricing-card-featured">
+            <span class="pricing-pill pricing-pill-hot">${isAr ? "الأكثر طلباً" : "Most popular"}</span>
+            <h3>Pro</h3>
+            <p class="pricing-price">149 <span>SAR</span></p>
+            <p class="pricing-desc">${isAr ? "الخطة المتكاملة للجاهزية والتوظيف." : "The complete readiness and hiring plan."}</p>
+            <ul class="pricing-feature-list">
+              <li>${isAr ? "كل مزايا Starter" : "Everything in Starter"}</li>
+              <li>${isAr ? "تحليل فجوات المهارات بالذكاء الاصطناعي" : "AI-powered skill gap analysis"}</li>
+              <li>${isAr ? "محاكاة مقابلة وملف ذكي قابل للمشاركة" : "Interview simulation + shareable smart profile"}</li>
+            </ul>
+            ${user
+              ? `<button class="btn btn-primary" data-action="choose-plan|pro">${selectedPlan === "pro" ? (isAr ? "تم الاختيار" : "Selected") : (isAr ? "اختر Pro" : "Choose Pro")}</button>`
+              : `<button class="btn btn-primary" data-nav="/register">${isAr ? "اختر Pro" : "Choose Pro"}</button>`}
           </article>
-          <article class="plan-card">
-            <span class="badge-soft">${this.state.settings.language === "ar" ? "للشركات" : "For Companies"}</span>
-            <h3>${this.state.settings.language === "ar" ? "Enterprise" : "Enterprise"}</h3>
-            <strong>Custom</strong>
-            <p>${this.state.settings.language === "ar" ? "ترتيب مرشحين + اختبارات مولدة + مسارات تقييم" : "Candidate ranking + generated assessments + custom evaluation flows"}</p>
+
+          <article class="pricing-card">
+            <span class="pricing-pill">${isAr ? "للشركات" : "Companies"}</span>
+            <h3>Enterprise</h3>
+            <p class="pricing-price">${isAr ? "حسب الطلب" : "Custom"}</p>
+            <p class="pricing-desc">${isAr ? "حل متقدم للفرق التي توظف بشكل مكثف." : "Advanced setup for high-volume hiring teams."}</p>
+            <ul class="pricing-feature-list">
+              <li>${isAr ? "ترتيب مرشحين حسب الجاهزية" : "Readiness-based candidate ranking"}</li>
+              <li>${isAr ? "اختبارات تقييم مولدة حسب الدور" : "Role-specific generated assessments"}</li>
+              <li>${isAr ? "لوحة تحكم وتقارير لفريق التوظيف" : "Hiring team dashboard and reports"}</li>
+            </ul>
+            ${user
+              ? `<button class="btn ${selectedPlan === "enterprise" ? "btn-primary" : "btn-ghost"}" data-action="choose-plan|enterprise">${selectedPlan === "enterprise" ? (isAr ? "تم الاختيار" : "Selected") : (isAr ? "اختر Enterprise" : "Choose Enterprise")}</button>`
+              : `<button class="btn btn-ghost" data-nav="/contact">${isAr ? "تواصل معنا" : "Talk to sales"}</button>`}
           </article>
+        </section>
+
+        <section class="pricing-compare">
+          <div class="pricing-compare-head">
+            <h3>${this.state.settings.language === "ar" ? "مقارنة سريعة بين الخطط" : "Quick plan comparison"}</h3>
+          </div>
+          <div class="pricing-compare-table">
+            <div class="pricing-compare-row pricing-compare-labels">
+              <span>${this.state.settings.language === "ar" ? "الميزة" : "Feature"}</span>
+              <span>Starter</span>
+              <span>Pro</span>
+              <span>Enterprise</span>
+            </div>
+            <div class="pricing-compare-row">
+              <span>${this.state.settings.language === "ar" ? "تحليل السيرة الذاتية" : "CV analysis"}</span>
+              <span>1x</span>
+              <span>${this.state.settings.language === "ar" ? "غير محدود" : "Unlimited"}</span>
+              <span>${this.state.settings.language === "ar" ? "غير محدود" : "Unlimited"}</span>
+            </div>
+            <div class="pricing-compare-row">
+              <span>${this.state.settings.language === "ar" ? "مطابقة الوظائف" : "Job matching"}</span>
+              <span>${this.state.settings.language === "ar" ? "أساسي" : "Basic"}</span>
+              <span>${this.state.settings.language === "ar" ? "متقدم" : "Advanced"}</span>
+              <span>${this.state.settings.language === "ar" ? "متقدم + مخصص" : "Advanced + custom"}</span>
+            </div>
+            <div class="pricing-compare-row">
+              <span>${this.state.settings.language === "ar" ? "محاكاة المقابلات" : "Interview simulation"}</span>
+              <span>—</span>
+              <span>${this.state.settings.language === "ar" ? "نعم" : "Yes"}</span>
+              <span>${this.state.settings.language === "ar" ? "نعم" : "Yes"}</span>
+            </div>
+            <div class="pricing-compare-row">
+              <span>${this.state.settings.language === "ar" ? "لوحة الشركات" : "Company dashboard"}</span>
+              <span>—</span>
+              <span>${this.state.settings.language === "ar" ? "محدودة" : "Limited"}</span>
+              <span>${this.state.settings.language === "ar" ? "كاملة" : "Full"}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="pricing-cta">
+          <div class="pricing-cta-copy">
+            <h3>${this.state.settings.language === "ar" ? "مستعد تبدأ؟" : "Ready to start?"}</h3>
+            <p>${this.state.settings.language === "ar" ? "ابدأ بخطة مناسبة اليوم، وطور جاهزيتك بشكل واضح خطوة بخطوة." : "Start with the right plan today and improve your readiness step by step."}</p>
+          </div>
+          <div class="pricing-cta-actions">
+            <button class="btn btn-primary" data-nav="/register">${this.state.settings.language === "ar" ? "إنشاء حساب" : "Create account"}</button>
+            <button class="btn btn-ghost" data-nav="/contact">${this.state.settings.language === "ar" ? "طلب عرض للشركات" : "Request enterprise demo"}</button>
+          </div>
         </section>
       `;
     }
@@ -3448,7 +3600,7 @@ if (action === "start-mic") {
         </section>
         <section class="cards two-up">
           <article class="info-card">
-            <h3>Email</h3>
+            <h3>${this.state.settings.language === "ar" ? "البريد الإلكتروني" : "Email"}</h3>
             <p>hello@tamheed.demo</p>
           </article>
           <article class="info-card">
@@ -3457,6 +3609,73 @@ if (action === "start-mic") {
           </article>
         </section>
       `;
+    }
+
+    faqPage() {
+      return `
+        <section class="page-head">
+          <h1>${this.state.settings.language === "ar" ? "الأسئلة الشائعة" : "FAQ"}</h1>
+          <p>${this.state.settings.language === "ar" ? "إجابات سريعة على أكثر الأسئلة المتكررة." : "Quick answers to common questions."}</p>
+        </section>
+        <section class="cards">
+          <article class="info-card">
+            <h3>${this.state.settings.language === "ar" ? "كيف أبدأ؟" : "How do I start?"}</h3>
+            <p>${this.state.settings.language === "ar" ? "أنشئ حساباً، ارفع سيرتك الذاتية، ثم راجع نتائج التحليل وخطة التطوير." : "Create an account, upload your CV, then review analysis and development plan."}</p>
+          </article>
+          <article class="info-card">
+            <h3>${this.state.settings.language === "ar" ? "هل بياناتي آمنة؟" : "Is my data secure?"}</h3>
+            <p>${this.state.settings.language === "ar" ? "نلتزم بممارسات حماية البيانات ولا نشاركها بدون إذن." : "We follow data protection practices and do not share data without consent."}</p>
+          </article>
+        </section>
+      `;
+    }
+
+    privacyPage() {
+      return `
+        <section class="page-head">
+          <h1>${this.state.settings.language === "ar" ? "سياسة الخصوصية" : "Privacy Policy"}</h1>
+          <p>${this.state.settings.language === "ar" ? "نوضح كيفية جمع البيانات واستخدامها داخل المنصة." : "How data is collected and used inside the platform."}</p>
+        </section>
+        <section class="cards">
+          <article class="info-card">
+            <h3>${this.state.settings.language === "ar" ? "استخدام البيانات" : "Data Usage"}</h3>
+            <p>${this.state.settings.language === "ar" ? "تُستخدم بيانات السيرة والتحليل لتحسين التوصيات وخطة التطوير فقط." : "CV and analysis data are used to improve recommendations and development plans only."}</p>
+          </article>
+        </section>
+      `;
+    }
+
+    termsPage() {
+      return `
+        <section class="page-head">
+          <h1>${this.state.settings.language === "ar" ? "الشروط والأحكام" : "Terms & Conditions"}</h1>
+          <p>${this.state.settings.language === "ar" ? "الشروط المنظمة لاستخدام المنصة والخدمات." : "Terms governing platform and service usage."}</p>
+        </section>
+        <section class="cards">
+          <article class="info-card">
+            <h3>${this.state.settings.language === "ar" ? "الاستخدام المقبول" : "Acceptable Use"}</h3>
+            <p>${this.state.settings.language === "ar" ? "يجب استخدام المنصة بشكل مهني وعدم إدخال معلومات مضللة." : "Use the platform professionally and avoid misleading information."}</p>
+          </article>
+        </section>
+      `;
+    }
+
+    stateCard(message, title = "") {
+      return `
+        <section class="info-card">
+          ${title ? `<h3>${title}</h3>` : ""}
+          <p class="muted">${message}</p>
+        </section>
+      `;
+    }
+
+    notFoundPage() {
+      return this.stateCard(
+        this.state.settings.language === "ar"
+          ? "الصفحة غير موجودة. تقدر ترجع للرئيسية من الشعار بالأعلى."
+          : "Page not found. You can return home using the logo above.",
+        "404"
+      );
     }
 
    microLabsTestPage() {
@@ -3566,6 +3785,21 @@ if (action === "start-mic") {
       const priorityGap = gaps[0];
       const badges = (progress.badges || []).slice(0, 4);
       const marketSignal = this.getMarketShiftSignals()[0];
+      const readinessParts = this.getReadinessBreakdown(user.id);
+      const baselineReadiness = clamp(readiness - readinessParts.plan, 0, 100);
+      const readinessDelta = readiness - baselineReadiness;
+      const targetRoleLabel = this.getProfileTargetRole(user);
+      const onboardingSteps = [
+        { done: Boolean(progress.cvUploaded), labelAr: "رفع السيرة الذاتية", labelEn: "Upload CV" },
+        { done: Boolean(targetRoleLabel), labelAr: "تحديد الدور المستهدف", labelEn: "Set target role" },
+        { done: Boolean((progress.appliedJobs || []).length > 0), labelAr: "التقديم على وظيفة", labelEn: "Apply to a role" }
+      ];
+      const onboardingCompleted = onboardingSteps.filter((step) => step.done).length;
+      const matchById = new Map(this.getMatchesForUser(user).map((entry) => [entry.job.id, entry]));
+      const appliedEntries = (progress.appliedJobs || [])
+        .map((jobId) => matchById.get(jobId))
+        .filter(Boolean)
+        .slice(0, 4);
       return `
         <section class="page-head tight">
           <h1>${this.state.settings.language === "ar" ? `مرحباً ${this.displayName(user)}` : `Welcome ${this.displayName(user)}`}</h1>
@@ -3652,6 +3886,50 @@ if (action === "start-mic") {
                   `).join("")}
                 </div>
               </article>
+              <article class="student-surface-card">
+                <div class="dashboard-section-head">
+                  <div>
+                    <h3>${this.state.settings.language === "ar" ? "البدء السريع" : "Quick start"}</h3>
+                    <p>${this.state.settings.language === "ar" ? "3 خطوات واضحة لفتح كل مزايا التوظيف والتوصيات." : "Three clear steps to unlock job matching and recommendations."}</p>
+                  </div>
+                  <span class="score-pill">${onboardingCompleted}/3</span>
+                </div>
+                <div class="student-onboarding-list">
+                  ${onboardingSteps.map((step, index) => `
+                    <div class="student-onboarding-item ${step.done ? "done" : ""}">
+                      <strong>${this.state.settings.language === "ar" ? `الخطوة ${index + 1}` : `Step ${index + 1}`}</strong>
+                      <small>${this.state.settings.language === "ar" ? step.labelAr : step.labelEn}</small>
+                      <span>${step.done ? "✓" : "○"}</span>
+                    </div>
+                  `).join("")}
+                </div>
+              </article>
+              <article class="student-surface-card">
+                <div class="dashboard-section-head">
+                  <div>
+                    <h3>${this.state.settings.language === "ar" ? "الطلبات المقدمة" : "Submitted applications"}</h3>
+                    <p>${this.state.settings.language === "ar" ? "الشركات التي قدمتِ عليها وحالة كل طلب." : "Companies you applied to and the current status of each application."}</p>
+                  </div>
+                  <button class="btn btn-ghost" data-nav="/jobs">${this.state.settings.language === "ar" ? "تصفّح الوظائف" : "Browse jobs"}</button>
+                </div>
+                <div class="student-application-stack">
+                  ${appliedEntries.length ? appliedEntries.map((item) => `
+                    <div class="student-application-card">
+                      <div>
+                        <strong>${item.job.company}</strong>
+                        <small>${this.jobTitle(item.job)}</small>
+                      </div>
+                      <span class="application-status-chip ${this.getApplicationStatus(progress, item.job.id)}">
+                        ${this.applicationStatusLabel(this.getApplicationStatus(progress, item.job.id))}
+                      </span>
+                    </div>
+                  `).join("") : `
+                    <div class="student-application-empty">
+                      <p class="muted">${this.state.settings.language === "ar" ? "ما عندك طلبات حتى الآن. ابدئي من صفحة الوظائف." : "No applications yet. Start by applying from the jobs page."}</p>
+                    </div>
+                  `}
+                </div>
+              </article>
             </div>
             <aside class="student-dashboard-side">
               <article class="student-side-card">
@@ -3666,6 +3944,13 @@ if (action === "start-mic") {
                 <strong>${priorityGap ? priorityGap.skill : (this.state.settings.language === "ar" ? "استمرار" : "Keep momentum")}</strong>
                 <p>${priorityGap ? (this.state.settings.language === "ar" ? "ابدأ بهذه المهارة أولاً لأنها الأقرب لرفع النتيجة بشكل ملحوظ." : "Start here first because it has the clearest impact on your score.") : (this.state.settings.language === "ar" ? "وضعك متماسك حاليًا، ويمكنك التركيز على تحسين التفاصيل أو التقديم." : "Your profile is stable for now, so focus on refinement or applications.")}</p>
                 <button class="btn btn-ghost" data-nav="/plan">${this.state.settings.language === "ar" ? "فتح الخطة" : "Open plan"}</button>
+              </article>
+              <article class="student-side-card">
+                <span class="hero-summary-label">${this.state.settings.language === "ar" ? "تغير الجاهزية هذا الأسبوع" : "Readiness change this week"}</span>
+                <strong>${readinessDelta >= 0 ? "+" : ""}${readinessDelta}%</strong>
+                <p>${this.state.settings.language === "ar"
+                  ? `الأساس ${baselineReadiness}%، وارتفعت الجاهزية عبر تقدّم الخطة إلى ${readiness}%.`
+                  : `Baseline ${baselineReadiness}%, improved to ${readiness}% mainly from plan progress.`}</p>
               </article>
               <article class="student-side-card">
                 <span class="hero-summary-label">${this.state.settings.language === "ar" ? "توقعات السوق" : "Market shift predictor"}</span>
@@ -3804,12 +4089,13 @@ if (action === "start-mic") {
         const topMatch = sortedMatches[0] || null;
         const strongMatches = sortedMatches.filter((item) => item.match >= 70).length;
         const needsCv = !progress || !progress.cvUploaded;
+        const applyDisabledReason = this.state.settings.language === "ar" ? "حمّل سيرتك الذاتية أولاً" : "Upload your CV first";
         return `
           <section class="page-head">
             <h1>${this.state.settings.language === "ar" ? "المطابقة الذكية للوظائف" : "Smart Job Matching"}</h1>
             <p>${this.state.settings.language === "ar" ? "فلتر النتائج حسب المدينة، نوع الدور، المهارة، ونسبة المطابقة." : "Filter by city, role type, skill, and match percentage."}</p>
-            ${this.state.realJobs && this.state.realJobs.length > 0 ? `<div style="margin-top: 12px; padding: 8px 12px; background: rgba(76, 175, 80, 0.1); border-left: 4px solid #4caf50; border-radius: 4px; font-size: 0.9em;"><strong>✓ ${this.state.settings.language === "ar" ? "وظائف LinkedIn" : "LinkedIn Jobs Loaded"}</strong> - ${this.state.realJobs.length} ${this.state.settings.language === "ar" ? "وظيفة من LinkedIn" : "positions from LinkedIn"}</div>` : this.state.jobsLoading ? `<div style="margin-top: 12px; padding: 8px 12px; background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107; border-radius: 4px; font-size: 0.9em;"><strong>⏳ ${this.state.settings.language === "ar" ? "جاري التحميل" : "Loading"}</strong> - ${this.state.settings.language === "ar" ? "جاري تحميل وظائف LinkedIn..." : "Loading LinkedIn jobs..."}</div>` : ""}
-            ${needsCv ? `<div style="margin-top: 10px; padding: 10px 12px; background: rgba(244, 67, 54, 0.08); border-left: 4px solid #f44336; border-radius: 8px; font-size: 0.92em;">${this.state.settings.language === "ar" ? "حمّل سيرتك أولاً لتتمكن من التقديم." : "Upload your CV first to apply for jobs."}</div>` : ""}
+            ${this.state.realJobs && this.state.realJobs.length > 0 ? `<div class="state-note success"><strong>✓ ${this.state.settings.language === "ar" ? "وظائف LinkedIn" : "LinkedIn Jobs Loaded"}</strong> - ${this.state.realJobs.length} ${this.state.settings.language === "ar" ? "وظيفة من LinkedIn" : "positions from LinkedIn"}</div>` : this.state.jobsLoading ? `<div class="state-note warn"><strong>⏳ ${this.state.settings.language === "ar" ? "جاري التحميل" : "Loading"}</strong> - ${this.state.settings.language === "ar" ? "جاري تحميل وظائف LinkedIn..." : "Loading LinkedIn jobs..."}</div>` : ""}
+            ${needsCv ? `<div class="state-note error">${this.state.settings.language === "ar" ? "حمّل سيرتك أولاً لتتمكن من التقديم." : "Upload your CV first to apply for jobs."}</div>` : ""}
           </section>
         <div class="jobs-page-stack">
           <section class="cards jobs-section">
@@ -3883,13 +4169,21 @@ if (action === "start-mic") {
                 <div class="job-meta">
                   <span>${item.job.salary}</span>
                   <span>${item.job.type}</span>
+                  ${this.getApplicationStatus(progress, item.job.id) !== "none" ? `<span>${this.applicationStatusLabel(this.getApplicationStatus(progress, item.job.id))}</span>` : ""}
                   </div>
                   <div class="actions-row">
                     <button class="btn btn-ghost" data-nav="/job/${item.job.id}">${this.state.settings.language === "ar" ? "التفاصيل" : "Details"}</button>
-                    <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}" ${needsCv ? "disabled" : ""}>${progress.appliedJobs.includes(item.job.id) ? (this.state.settings.language === "ar" ? "تم التقديم" : "Applied") : needsCv ? (this.state.settings.language === "ar" ? "حمّل سيرتك" : "Upload CV") : this.t("apply")}</button>
+                    <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}" ${needsCv ? "disabled" : ""} ${needsCv ? `title="${applyDisabledReason}"` : ""}>${this.getApplicationStatus(progress, item.job.id) === "none" ? this.t("apply") : this.applicationStatusLabel(this.getApplicationStatus(progress, item.job.id))}</button>
                   </div>
                 </article>
-              `).join("") : `<article class="info-card"><p class="muted">${isSaraDemo ? (this.state.settings.language === "ar" ? "لا توجد نتائج مطابقة للفلترة الحالية." : "No jobs match the current filters.") : (this.state.jobsLoading ? (this.state.settings.language === "ar" ? "جاري تحميل وظائف LinkedIn..." : "Loading LinkedIn jobs...") : (this.state.settings.language === "ar" ? "لا توجد وظائف LinkedIn متاحة حالياً." : "No LinkedIn jobs available right now."))}</p></article>`}
+              `).join("") : this.stateCard(
+                isSaraDemo
+                  ? (this.state.settings.language === "ar" ? "لا توجد نتائج مطابقة للفلترة الحالية." : "No jobs match the current filters.")
+                  : (this.state.jobsLoading
+                    ? (this.state.settings.language === "ar" ? "جاري تحميل وظائف LinkedIn..." : "Loading LinkedIn jobs...")
+                    : (this.state.settings.language === "ar" ? "لا توجد وظائف LinkedIn متاحة حالياً." : "No LinkedIn jobs available right now.")),
+                this.state.settings.language === "ar" ? "لا توجد نتائج حالياً" : "No results yet"
+              )}
             </section>
         </div>
       `;
@@ -3898,11 +4192,12 @@ if (action === "start-mic") {
       jobDetailsPage(jobId) {
         const user = this.currentUser();
         const progress = this.currentProgress();
-        const item = this.getMatchesForUser(user).find((entry) => entry.job.id === jobId);
-        if (!item) {
-          return `<section class="info-card"><p class="muted">${this.state.settings.language === "ar" ? "الوظيفة غير موجودة." : "Job not found."}</p></section>`;
-        }
-        const needsCv = !progress || !progress.cvUploaded;
+      const item = this.getMatchesForUser(user).find((entry) => entry.job.id === jobId);
+      if (!item) {
+          return this.stateCard(this.state.settings.language === "ar" ? "الوظيفة غير موجودة." : "Job not found.");
+      }
+      const needsCv = !progress || !progress.cvUploaded;
+      const applyDisabledReason = this.state.settings.language === "ar" ? "حمّل سيرتك الذاتية أولاً" : "Upload your CV first";
         const userSkills = (user.topSkills || []).map((skill) => skill.toLowerCase());
         const matchedCount = item.matchedSkills.length;
         const missingCount = item.missingSkills.length;
@@ -3927,7 +4222,7 @@ if (action === "start-mic") {
                 ? "هذا العرض يوضح أين تتقاطع مهاراتك الحالية مع متطلبات الوظيفة، وما الذي ينقصك للوصول إلى توافق أعلى."
                 : "This view shows where your current skills intersect with the job requirements and what is still missing for a stronger fit."}</p>
               <div class="actions-row compact-actions">
-                <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}" ${needsCv ? "disabled" : ""}>${progress.appliedJobs.includes(item.job.id) ? (this.state.settings.language === "ar" ? "تم التقديم" : "Applied") : needsCv ? (this.state.settings.language === "ar" ? "حمّل سيرتك" : "Upload CV") : this.t("apply")}</button>
+                <button class="btn btn-primary" data-action="apply-job" data-job-id="${item.job.id}" ${needsCv ? "disabled" : ""} ${needsCv ? `title="${applyDisabledReason}"` : ""}>${this.getApplicationStatus(progress, item.job.id) === "none" ? this.t("apply") : this.applicationStatusLabel(this.getApplicationStatus(progress, item.job.id))}</button>
                 <button class="btn btn-ghost" data-nav="/plan">${this.state.settings.language === "ar" ? "مسار تعلّم مقترح" : "Recommended learning path"}</button>
               </div>
             </div>
@@ -4628,7 +4923,7 @@ if (action === "start-mic") {
                   </div>
                 ` : `
                   <p style="color: var(--text-soft); font-size: 0.9em;">${this.state.settings.language === "ar" ? "لم تحمل سيرة ذاتية بعد" : "No CV uploaded yet"}</p>
-                  <button class="btn btn-sm btn-ghost" data-nav="/upload-cv" style="margin-top: 8px;">${this.state.settings.language === "ar" ? "ارفع السيرة" : "Upload CV"}</button>
+                  <button class="btn btn-sm btn-ghost" data-nav="/upload" style="margin-top: 8px;">${this.state.settings.language === "ar" ? "ارفع السيرة" : "Upload CV"}</button>
                 `}
               </div>
             </article>
@@ -4638,7 +4933,6 @@ if (action === "start-mic") {
                 <h3>${this.state.settings.language === "ar" ? "افتح الملخصات المرتبطة" : "Open related summaries"}</h3>
               </div>
               <div class="actions-row smart-profile-actions">
-                <button class="btn btn-ghost" data-nav="/behavior">${this.state.settings.language === "ar" ? "عرض السلوك" : "Behavioral summary"}</button>
                 <button class="btn btn-ghost" data-nav="/interview">${this.state.settings.language === "ar" ? "عرض المقابلة" : "Interview summary"}</button>
               </div>
             </article>
@@ -4648,7 +4942,9 @@ if (action === "start-mic") {
     }
 
     companyDashboard() {
+      const companyUser = this.currentUser();
       const activeRole = this.state.companyRoles[0] || DATA.defaultRoleRequirement;
+      const companyName = activeRole.companyName || companyUser.companyName || companyUser.name || "-";
       const ranked = this.rankCandidates(activeRole).slice(0, 5);
       return `
         <section class="page-head">
@@ -4676,6 +4972,10 @@ if (action === "start-mic") {
               </div>
             </div>
           <div class="company-overview-grid">
+            <div class="company-overview-item">
+              <small>${this.state.settings.language === "ar" ? "اسم الشركة" : "Company name"}</small>
+              <strong>${companyName}</strong>
+            </div>
             <div class="company-overview-item">
               <small>${this.state.settings.language === "ar" ? "المهارات المطلوبة" : "Required skills"}</small>
               <strong>${activeRole.requiredSkills.join(" / ")}</strong>
@@ -4705,6 +5005,7 @@ if (action === "start-mic") {
                 <h3>${this.state.settings.language === "ar" ? "حدّد مواصفات المرشح المطلوب" : "Define the ideal candidate"}</h3>
                 <p>${this.state.settings.language === "ar" ? "كل تعديل هنا يعيد ترتيب المرشحين حسب الجاهزية والملاءمة للدور." : "Every update here refreshes the ranking by readiness and role fit."}</p>
               </div>
+              <label>${this.state.settings.language === "ar" ? "اسم الشركة" : "Company name"}<input name="companyName" value="${companyName}" required></label>
               <label>${this.state.settings.language === "ar" ? "المسمى" : "Role title"}<input name="title" value="${activeRole.title}" required></label>
               <label>${this.state.settings.language === "ar" ? "المهارات المطلوبة" : "Required skills"}<input name="requiredSkills" value="${activeRole.requiredSkills.join(", ")}" required></label>
               <label>${this.state.settings.language === "ar" ? "سنوات الخبرة" : "Years of experience"}<input type="number" name="years" value="${activeRole.years}" min="0"></label>
@@ -4748,8 +5049,11 @@ if (action === "start-mic") {
     }
 
     candidatesPage() {
+      const companyUser = this.currentUser();
       const activeRole = this.state.companyRoles[0] || DATA.defaultRoleRequirement;
+      const companyName = activeRole.companyName || companyUser.companyName || companyUser.name || "-";
       const ranked = this.rankCandidates(activeRole);
+      const filteredRanked = this.getFilteredCandidates(ranked);
       return `
         <section class="page-head">
           <h1>${this.state.settings.language === "ar" ? "المرشحون" : "Candidates"}</h1>
@@ -4766,15 +5070,19 @@ if (action === "start-mic") {
               <div class="company-overview-metrics">
                 <div class="company-metric">
                   <small>${this.state.settings.language === "ar" ? "عدد المرشحين" : "Candidates"}</small>
-                  <strong>${ranked.length}</strong>
+                  <strong>${filteredRanked.length}</strong>
                 </div>
                 <div class="company-metric">
                   <small>${this.state.settings.language === "ar" ? "أفضل نتيجة" : "Top score"}</small>
-                  <strong>${ranked[0] ? `${ranked[0].overall}%` : "-"}</strong>
+                  <strong>${filteredRanked[0] ? `${filteredRanked[0].overall}%` : "-"}</strong>
                 </div>
               </div>
             </div>
             <div class="company-overview-grid">
+              <div class="company-overview-item">
+                <small>${this.state.settings.language === "ar" ? "اسم الشركة" : "Company name"}</small>
+                <strong>${companyName}</strong>
+              </div>
               <div class="company-overview-item">
                 <small>${this.state.settings.language === "ar" ? "المهارات المطلوبة" : "Required skills"}</small>
                 <strong>${activeRole.requiredSkills.join(" / ")}</strong>
@@ -4793,8 +5101,34 @@ if (action === "start-mic") {
               </div>
             </div>
           </article>
+          <article class="company-panel-card">
+            <div class="dashboard-section-head">
+              <div>
+                <h3>${this.state.settings.language === "ar" ? "فلترة المرشحين" : "Candidate filters"}</h3>
+                <p>${this.state.settings.language === "ar" ? "فلترة حسب المدينة، الجاهزية، الخبرة، والمهارة." : "Filter by city, readiness, experience, and key skill."}</p>
+              </div>
+            </div>
+            <section class="filter-bar jobs-filter-grid">
+              <select data-company-filter="city">
+                <option value="all">${this.state.settings.language === "ar" ? "كل المدن" : "All cities"}</option>
+                ${["Riyadh", "Jeddah", "Dhahran", "Tabuk"].map((city) => `<option value="${city}" ${this.state.companyCandidateFilters.city === city ? "selected" : ""}>${city}</option>`).join("")}
+              </select>
+              <select data-company-filter="skill">
+                <option value="all">${this.state.settings.language === "ar" ? "كل المهارات" : "All skills"}</option>
+                ${DATA.skills.map((skill) => `<option value="${skill}" ${this.state.companyCandidateFilters.skill === skill ? "selected" : ""}>${skill}</option>`).join("")}
+              </select>
+              <label class="range-wrap jobs-range-wrap">
+                <span>${this.state.settings.language === "ar" ? "الحد الأدنى للجاهزية" : "Min readiness"}: ${this.state.companyCandidateFilters.minReadiness}%</span>
+                <input type="range" min="0" max="100" value="${this.state.companyCandidateFilters.minReadiness}" data-company-filter="minReadiness">
+              </label>
+              <label class="range-wrap jobs-range-wrap">
+                <span>${this.state.settings.language === "ar" ? "الحد الأدنى للخبرة" : "Min years"}: ${this.state.companyCandidateFilters.minYears}</span>
+                <input type="range" min="0" max="10" value="${this.state.companyCandidateFilters.minYears}" data-company-filter="minYears">
+              </label>
+            </section>
+          </article>
           <section class="cards company-candidates-grid">
-            ${ranked.map((entry) => `
+            ${filteredRanked.length ? filteredRanked.map((entry) => `
               <article class="company-candidate-card company-candidate-page-card">
                 <div class="company-candidate-head">
                   <div>
@@ -4809,13 +5143,18 @@ if (action === "start-mic") {
                 </div>
                 <p class="muted compact-copy">${this.state.settings.language === "ar" ? `متطابق: ${entry.matchedSkills.join(", ") || "-"}` : `Matched: ${entry.matchedSkills.join(", ") || "-"}`}</p>
                 <p class="muted compact-copy">${this.state.settings.language === "ar" ? `ناقص: ${entry.missingSkills.join(", ") || "-"}` : `Missing: ${entry.missingSkills.join(", ") || "-"}`}</p>
-                <div class="badge-row">${(this.state.progress[entry.student.id].badges || []).map((badge) => `<span class="badge-soft">${badge}</span>`).join("")}</div>
+                <div class="badge-row">${((this.state.progress[entry.student.id] && this.state.progress[entry.student.id].badges) || []).map((badge) => `<span class="badge-soft">${badge}</span>`).join("")}</div>
                 <div class="actions-row">
                   <button class="btn btn-ghost" data-nav="/candidate/${entry.student.id}">${this.t("viewProfile")}</button>
-                  <button class="btn btn-primary" data-action="invite-candidate" data-candidate-id="${entry.student.id}" ${this.isCandidateInvited(entry.student.id) ? "disabled" : ""}>${this.isCandidateInvited(entry.student.id) ? (this.state.settings.language === "ar" ? "تمت الدعوة" : "Invited") : this.t("invite")}</button>
+                  <button class="btn btn-ghost" data-action="set-application-status" data-candidate-id="${entry.student.id}" data-status="accepted">${this.state.settings.language === "ar" ? "قبول" : "Accept"}</button>
+                  <button class="btn btn-ghost" data-action="set-application-status" data-candidate-id="${entry.student.id}" data-status="rejected">${this.state.settings.language === "ar" ? "رفض" : "Reject"}</button>
+                  <button class="btn btn-primary" data-action="invite-candidate" data-candidate-id="${entry.student.id}" ${this.isCandidateInvited(entry.student.id) ? "disabled" : ""} ${this.isCandidateInvited(entry.student.id) ? `title="${this.state.settings.language === "ar" ? "تمت دعوته مسبقًا" : "Already invited"}"` : ""}>${this.isCandidateInvited(entry.student.id) ? (this.state.settings.language === "ar" ? "تمت الدعوة" : "Invited") : this.t("invite")}</button>
                 </div>
               </article>
-            `).join("")}
+            `).join("") : this.stateCard(
+              this.state.settings.language === "ar" ? "لا يوجد مرشحون مطابقون للفلاتر الحالية." : "No candidates match the current filters.",
+              this.state.settings.language === "ar" ? "نتائج الفلترة" : "Filtered results"
+            )}
           </section>
         </section>
       `;
@@ -4824,7 +5163,7 @@ if (action === "start-mic") {
     candidateProfilePage(studentId) {
       const student = this.state.accounts.students.find((item) => item.id === studentId);
       if (!student) {
-        return `<section class="info-card"><p class="muted">${this.state.settings.language === "ar" ? "المرشح غير موجود." : "Candidate not found."}</p></section>`;
+        return this.stateCard(this.state.settings.language === "ar" ? "المرشح غير موجود." : "Candidate not found.");
       }
       const progress = this.state.progress[student.id];
       const technical = progress.readinessParts.cv + progress.readinessParts.micro;
@@ -4846,7 +5185,11 @@ if (action === "start-mic") {
             <h3>${this.state.settings.language === "ar" ? "الروابط والأدلة" : "Portfolio & proof"}</h3>
             <div class="stack">${(student.portfolio || []).map((link) => `<p>${link}</p>`).join("")}</div>
             <p>${this.state.settings.language === "ar" ? `المختبر المكتمل: ${progress.lab.passed ? "نعم" : "لا"}` : `Micro-lab completed: ${progress.lab.passed ? "Yes" : "No"}`}</p>
-            <button class="btn btn-primary" data-action="invite-candidate" data-candidate-id="${student.id}" ${this.isCandidateInvited(student.id) ? "disabled" : ""}>${this.isCandidateInvited(student.id) ? (this.state.settings.language === "ar" ? "تمت الدعوة" : "Invited") : this.t("invite")}</button>
+            <div class="actions-row">
+              <button class="btn btn-ghost" data-action="set-application-status" data-candidate-id="${student.id}" data-status="accepted">${this.state.settings.language === "ar" ? "قبول" : "Accept"}</button>
+              <button class="btn btn-ghost" data-action="set-application-status" data-candidate-id="${student.id}" data-status="rejected">${this.state.settings.language === "ar" ? "رفض" : "Reject"}</button>
+              <button class="btn btn-primary" data-action="invite-candidate" data-candidate-id="${student.id}" ${this.isCandidateInvited(student.id) ? "disabled" : ""} ${this.isCandidateInvited(student.id) ? `title="${this.state.settings.language === "ar" ? "تمت دعوته مسبقًا" : "Already invited"}"` : ""}>${this.isCandidateInvited(student.id) ? (this.state.settings.language === "ar" ? "تمت الدعوة" : "Invited") : this.t("invite")}</button>
+            </div>
           </article>
         </section>
       `;
@@ -4942,12 +5285,12 @@ if (action === "start-mic") {
       const route = this.state.route;
       const user = this.currentUser();
       const sharedProtected = new Set(["market-shift"]);
-      const protectedStudent = new Set(["student-dashboard", "upload", "jobs", "job", "plan", "behavior", "interview", "profile", "micro-labs-test"]);
+      const protectedStudent = new Set(["student-dashboard", "upload", "jobs", "job", "plan", "interview", "profile", "micro-labs-test"]);
       const protectedCompany = new Set(["company-dashboard", "candidate", "candidates", "assessments"]);
       const needsAuth = sharedProtected.has(route.name) || protectedStudent.has(route.name) || protectedCompany.has(route.name);
 
       if (needsAuth && !this.state.authResolved) {
-        return `<section class="info-card"><p class="muted">${this.state.settings.language === "ar" ? "جاري التحقق من الجلسة..." : "Checking your session..."}</p></section>`;
+        return this.stateCard(this.state.settings.language === "ar" ? "جاري التحقق من الجلسة..." : "Checking your session...");
       }
 
       if (sharedProtected.has(route.name) && !user) {
@@ -4972,6 +5315,12 @@ if (action === "start-mic") {
           return this.aboutPage();
         case "contact":
           return this.contactPage();
+        case "faq":
+          return this.faqPage();
+        case "privacy":
+          return this.privacyPage();
+        case "terms":
+          return this.termsPage();
         case "login":
           return this.authPage("login");
         case "register":
@@ -4990,8 +5339,6 @@ if (action === "start-mic") {
           return this.planPage();
         case "market-shift":
           return this.marketShiftPage();
-        case "behavior":
-          return this.behaviorPage();
         case "interview":
           return this.interviewPage();
         case "profile":
@@ -5007,7 +5354,7 @@ if (action === "start-mic") {
         case "assessments":
           return this.assessmentsPage();
         default:
-          return this.landingPage();
+          return this.notFoundPage();
       }
     }
 
@@ -5026,8 +5373,9 @@ if (action === "start-mic") {
             </main>
           </div>
           ${rail}
+          ${this.siteFooter()}
           ${this.bottomTabs()}
-          ${this.state.toast ? `<div class="toast-snackbar">${this.state.toast}</div>` : ""}
+          ${this.state.toast ? `<div class="toast-snackbar" role="status" aria-live="polite">${this.state.toast}</div>` : ""}
         </div>
       `;
 
