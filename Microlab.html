@@ -282,8 +282,8 @@
         <div class="controls">
             <div class="xp-badge" id="ui-xp-display" title="Experience Points earned from accurate validations">0 XP</div>
             
-            <div class="control-group" title="Enable Teaching Mode to unlock conceptual deep dives.">
-                <label for="teaching-toggle">🎓 Teaching Mode</label>
+            <div class="control-group" id="teaching-group" title="Enable Teaching Mode to unlock conceptual deep dives.">
+                <label for="teaching-toggle" id="teaching-label">🎓 Teaching Mode</label>
                 <label class="switch">
                     <input type="checkbox" id="teaching-toggle">
                     <span class="slider"></span>
@@ -342,22 +342,22 @@
                         <div class="problem-header"><h2 id="ui-title">Scenario Title</h2></div>
                         <div class="desc-text" id="ui-desc"></div>
                         <div class="task-list">
-                            <strong style="display:block; margin-bottom:8px;">Objectives:</strong>
+                            <strong style="display:block; margin-bottom:8px;" id="ui-objectives-label">Objectives:</strong>
                             <ul id="ui-tasks"></ul>
                         </div>
                         <div id="ui-feedback" class="feedback-alert" role="alert"></div>
                     </div>
 
                     <div id="tab-hints" class="tab-pane">
-                        <h3 style="margin-top:0;">Available Hints</h3>
+                        <h3 style="margin-top:0;" id="ui-hints-title">Available Hints</h3>
                         <div id="ui-hints-container"></div>
                         <button class="btn btn-ghost" id="btn-reveal-hint" style="width:100%; justify-content:center;">Reveal Next Hint</button>
                     </div>
 
                     <div id="tab-theory" class="tab-pane">
-                        <h3 style="margin-top:0;">Conceptual Deep Dive</h3>
+                        <h3 style="margin-top:0;" id="ui-theory-title">Conceptual Deep Dive</h3>
                         <div id="ui-theory-content">
-                            <p style="color: var(--text-secondary); font-style: italic;">Enable Teaching Mode or solve the challenge to unlock the theoretical breakdown and architecture diagrams.</p>
+                            <p style="color: var(--text-secondary); font-style: italic;" id="ui-theory-empty">Enable Teaching Mode or solve the challenge to unlock the theoretical breakdown and architecture diagrams.</p>
                         </div>
                     </div>
                 </div>
@@ -372,7 +372,7 @@
                 <div id="ide-container">
                     <div class="ide-header">
                         <span id="ui-filename">solution.js</span>
-                        <span>Env: <span style="color: var(--accent-teal);">Sandboxed</span></span>
+                        <span id="ui-env-label">Env: <span style="color: var(--accent-teal);">Sandboxed</span></span>
                     </div>
                     <div id="editor-target" style="flex:1; display:flex; flex-direction:column;"></div>
                     <div class="terminal-container" id="terminal" aria-live="polite"></div>
@@ -393,8 +393,8 @@
 
         <section id="results-view" class="view-section">
             <div class="results-card glass">
-                <h1 style="margin: 0; color: var(--text-primary);">Assessment Finalized</h1>
-                <p style="color: var(--text-secondary); margin: 0; font-size: 16px;">Technical and Theoretical Competency Verified</p>
+                <h1 style="margin: 0; color: var(--text-primary);" id="ui-results-title">Assessment Finalized</h1>
+                <p style="color: var(--text-secondary); margin: 0; font-size: 16px;" id="ui-results-subtitle">Technical and Theoretical Competency Verified</p>
                 
                 <svg viewBox="0 0 36 36" class="circular-chart">
                     <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
@@ -403,19 +403,19 @@
                 </svg>
 
                 <div class="performance-breakdown">
-                    <div class="perf-stat"><span class="perf-val" id="res-attempts">0</span><span class="perf-lbl">Total Attempts</span></div>
-                    <div class="perf-stat"><span class="perf-val" id="res-hints">0</span><span class="perf-lbl">Hints Used</span></div>
-                    <div class="perf-stat"><span class="perf-val" id="res-time">0m 0s</span><span class="perf-lbl">Time Taken</span></div>
+                    <div class="perf-stat"><span class="perf-val" id="res-attempts">0</span><span class="perf-lbl" id="ui-total-attempts">Total Attempts</span></div>
+                    <div class="perf-stat"><span class="perf-val" id="res-hints">0</span><span class="perf-lbl" id="ui-hints-used">Hints Used</span></div>
+                    <div class="perf-stat"><span class="perf-val" id="res-time">0m 0s</span><span class="perf-lbl" id="ui-time-taken">Time Taken</span></div>
                 </div>
                 
                 <div style="text-align: center; width: 100%; border-top: 1px solid var(--border-glass); padding-top: 20px; margin-top: 10px;">
-                    <h3 style="margin: 0 0 15px 0;">Earned Achievements</h3>
+                    <h3 style="margin: 0 0 15px 0;" id="ui-achievements-title">Earned Achievements</h3>
                     <div class="badges-container" id="ui-badges"></div>
                 </div>
 
                 <div style="text-align: center; width: 100%; border-top: 1px solid var(--border-glass); padding-top: 20px; margin-top: 10px;">
-                    <h3 style="margin: 0 0 5px 0;">Recommended Certifications</h3>
-                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">Based on your performance in this track, consider pursuing:</p>
+                    <h3 style="margin: 0 0 5px 0;" id="ui-certs-title">Recommended Certifications</h3>
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;" id="ui-certs-subtitle">Based on your performance in this track, consider pursuing:</p>
                     <div class="cert-grid" id="ui-certs"></div>
                 </div>
 
@@ -429,6 +429,120 @@
          * Tamheed Master Build Engine
          * Expanded Scenarios, Certifications Engine, Flawless Scoring Logic
          */
+
+        const LAB_SETTINGS = (() => {
+            try {
+                const q = new URLSearchParams(window.location.search);
+                const stored = JSON.parse(localStorage.getItem('tamheed_settings') || '{}');
+                const lang = (q.get('lang') || stored.language || 'ar').toLowerCase() === 'en' ? 'en' : 'ar';
+                const theme = (q.get('theme') || stored.theme || '').toLowerCase();
+                return { lang, theme };
+            } catch (_e) {
+                return { lang: 'ar', theme: '' };
+            }
+        })();
+
+        const I18N = {
+            en: {
+                teachingMode: "🎓 Teaching Mode",
+                exitTrack: "Exit Track",
+                tabTask: "Task",
+                tabHints: "Hints",
+                tabTheoryLocked: "Theory 🔒",
+                tabTheoryOpen: "Theory 📖",
+                tabTheoryUnlocked: "Theory 📖 (Unlocked)",
+                objectives: "Objectives:",
+                hintsTitle: "Available Hints",
+                revealHint: "Reveal Next Hint",
+                theoryTitle: "Conceptual Deep Dive",
+                theoryEmpty: "Enable Teaching Mode or solve the challenge to unlock the theoretical breakdown and architecture diagrams.",
+                envLabel: "Env: <span style=\"color: var(--accent-teal);\">Sandboxed</span>",
+                reset: "Reset",
+                execute: "Execute Validation",
+                evaluating: "Evaluating...",
+                nextScenario: "Next Scenario ➔",
+                returnDashboard: "Return to Dashboard",
+                resultsTitle: "Assessment Finalized",
+                resultsSubtitle: "Technical and Theoretical Competency Verified",
+                totalAttempts: "Total Attempts",
+                hintsUsed: "Hints Used",
+                timeTaken: "Time Taken",
+                achievementsTitle: "Earned Achievements",
+                certsTitle: "Recommended Certifications",
+                certsSubtitle: "Based on your performance in this track, consider pursuing:",
+                validated: "✔ Validated:",
+                error: "✖ Error:",
+                approved: "Solution approved.",
+                incorrect: "Incorrect. Check the hints tab if you require assistance.",
+                solveToUnlock: "Solve the challenge to unlock the theoretical breakdown.",
+                typeAnswerPlaceholder: "Type your answer here...",
+                teachingBadge: "📘 Teaching Mode Active",
+                coreConcept: "Core Concept",
+                commonPitfalls: "Common Pitfalls",
+                enterpriseContext: "Enterprise Context",
+                networkTag: "Infrastructure",
+                networkTitle: "Network & Routing Defense",
+                networkDesc: "Debug OSPF adjacencies, fix Firewall ACLs, and remediate BGP misconfigurations.",
+                architectureTag: "Hardware & Systems",
+                architectureTitle: "Computer Architecture",
+                architectureDesc: "Identify memory leaks and remediate buffer overflow vulnerabilities in C-style structures.",
+                foundationsTag: "Knowledge Check",
+                foundationsTitle: "Security Foundations Quiz",
+                foundationsDesc: "Validate your theoretical knowledge of cryptography, access controls, and zero trust protocols."
+            },
+            ar: {
+                teachingMode: "🎓 وضع الشرح",
+                exitTrack: "الخروج من المسار",
+                tabTask: "المهمة",
+                tabHints: "التلميحات",
+                tabTheoryLocked: "النظرية 🔒",
+                tabTheoryOpen: "النظرية 📖",
+                tabTheoryUnlocked: "النظرية 📖 (مفتوحة)",
+                objectives: "الأهداف:",
+                hintsTitle: "التلميحات المتاحة",
+                revealHint: "إظهار التلميح التالي",
+                theoryTitle: "شرح مفاهيمي",
+                theoryEmpty: "فعّل وضع الشرح أو أنهِ التحدي لعرض الشرح النظري والمخططات.",
+                envLabel: "البيئة: <span style=\"color: var(--accent-teal);\">Sandboxed</span>",
+                reset: "إعادة ضبط",
+                execute: "تشغيل التحقق",
+                evaluating: "جاري التقييم...",
+                nextScenario: "السيناريو التالي ➔",
+                returnDashboard: "العودة للواجهة",
+                resultsTitle: "تم إنهاء التقييم",
+                resultsSubtitle: "تم التحقق من الكفاءة التقنية والنظرية",
+                totalAttempts: "إجمالي المحاولات",
+                hintsUsed: "التلميحات المستخدمة",
+                timeTaken: "الوقت المستغرق",
+                achievementsTitle: "الإنجازات المكتسبة",
+                certsTitle: "شهادات مقترحة",
+                certsSubtitle: "بناءً على أدائك في هذا المسار، ننصحك بـ:",
+                validated: "✔ تم التحقق:",
+                error: "✖ خطأ:",
+                approved: "تم اعتماد الحل.",
+                incorrect: "إجابة غير صحيحة. راجع التلميحات إذا احتجت.",
+                solveToUnlock: "أكمِل التحدي لفتح الشرح النظري.",
+                typeAnswerPlaceholder: "اكتب إجابتك هنا...",
+                teachingBadge: "📘 وضع الشرح مفعل",
+                coreConcept: "المفهوم الأساسي",
+                commonPitfalls: "أخطاء شائعة",
+                enterpriseContext: "سياق مؤسسي",
+                networkTag: "البنية التحتية",
+                networkTitle: "دفاع الشبكات والتوجيه",
+                networkDesc: "حل مشاكل OSPF وACL وتصحيح إعدادات BGP.",
+                architectureTag: "العتاد والأنظمة",
+                architectureTitle: "هندسة الحاسب",
+                architectureDesc: "اكتشاف تسرب الذاكرة ومعالجة ثغرات تجاوز السعة.",
+                foundationsTag: "اختبار معرفي",
+                foundationsTitle: "اختبار أساسيات الأمن",
+                foundationsDesc: "تحقق من فهمك للتشفير والتحكم بالوصول ونهج Zero Trust."
+            }
+        };
+
+        function t(key) {
+            const pack = I18N[LAB_SETTINGS.lang] || I18N.en;
+            return pack[key] || I18N.en[key] || key;
+        }
 
         // --- DATA LAYER ---
         const CERTIFICATIONS = {
@@ -585,10 +699,15 @@
 
             init: function() {
                 this.cacheDOM();
+                this.applyLocale();
                 this.bindEvents();
                 Metrics.addXP(0); 
-                
-                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+
+                if (LAB_SETTINGS.theme === 'dark') {
+                    this.state.theme = 'dark';
+                    this.DOM.body.setAttribute('data-theme', 'dark');
+                    this.DOM.themeIcon.innerText = '☀️';
+                } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     this.DOM.themeToggle.checked = true;
                     this.UI.toggleTheme();
                 }
@@ -625,6 +744,66 @@
                 };
             },
 
+            applyLocale: function() {
+                const isAr = LAB_SETTINGS.lang === 'ar';
+                document.documentElement.lang = isAr ? 'ar' : 'en';
+                document.documentElement.dir = isAr ? 'rtl' : 'ltr';
+
+                const el = (id) => document.getElementById(id);
+                el('teaching-label').innerText = t('teachingMode');
+                el('nav-dashboard').innerText = t('exitTrack');
+                el('btn-tab-tasks').innerText = t('tabTask');
+                el('btn-tab-hints').innerText = t('tabHints');
+                el('btn-tab-theory').innerText = t('tabTheoryLocked');
+                el('ui-objectives-label').innerText = t('objectives');
+                el('ui-hints-title').innerText = t('hintsTitle');
+                el('btn-reveal-hint').innerText = t('revealHint');
+                el('ui-theory-title').innerText = t('theoryTitle');
+                el('ui-theory-empty').innerText = t('theoryEmpty');
+                el('ui-env-label').innerHTML = t('envLabel');
+                el('btn-reset').innerText = t('reset');
+                el('btn-submit').innerText = t('execute');
+                el('btn-next').innerText = t('nextScenario');
+                el('btn-return-dash').innerText = t('returnDashboard');
+                el('ui-results-title').innerText = t('resultsTitle');
+                el('ui-results-subtitle').innerText = t('resultsSubtitle');
+                el('ui-total-attempts').innerText = t('totalAttempts');
+                el('ui-hints-used').innerText = t('hintsUsed');
+                el('ui-time-taken').innerText = t('timeTaken');
+                el('ui-achievements-title').innerText = t('achievementsTitle');
+                el('ui-certs-title').innerText = t('certsTitle');
+                el('ui-certs-subtitle').innerText = t('certsSubtitle');
+                el('ui-teaching-badge').innerText = t('teachingBadge');
+                el('teaching-group').title = isAr
+                    ? "فعّل وضع الشرح لعرض تفاصيل نظرية إضافية."
+                    : "Enable Teaching Mode to unlock conceptual deep dives.";
+                el('theme-btn').title = isAr ? "تبديل المظهر" : "Toggle Light/Dark Mode";
+                el('theme-btn').setAttribute('aria-label', isAr ? "تبديل المظهر" : "Toggle Theme");
+                el('nav-dashboard').title = isAr ? "العودة لاختيار المسار" : "Return to Track Selection";
+                el('btn-reset').title = isAr ? "إعادة الضبط (Ctrl+R)" : "Reset Code (Ctrl+R)";
+                el('btn-submit').title = isAr ? "تشغيل التحقق (Ctrl+Enter)" : "Execute Validation (Ctrl+Enter)";
+                el('btn-next').title = isAr ? "السيناريو التالي (Ctrl+Enter)" : "Next Scenario (Ctrl+Enter)";
+                el('btn-tab-theory').title = isAr ? "فعّل وضع الشرح أو أكمل المهمة لفتح النظرية." : "Enable Teaching Mode or solve the task to unlock.";
+                el('ui-timer').title = isAr ? "مؤقت السيناريو" : "Scenario Timer";
+
+                const cards = document.querySelectorAll('.dashboard-grid .track-card');
+                if (cards[0]) {
+                    cards[0].querySelector('.track-tag').innerText = t('networkTag');
+                    cards[0].querySelector('h2').innerText = t('networkTitle');
+                    cards[0].querySelector('p').innerText = t('networkDesc');
+                }
+                if (cards[1]) {
+                    cards[1].querySelector('.track-tag').innerText = t('architectureTag');
+                    cards[1].querySelector('h2').innerText = t('architectureTitle');
+                    cards[1].querySelector('p').innerText = t('architectureDesc');
+                }
+                if (cards[2]) {
+                    cards[2].querySelector('.track-tag').innerText = t('foundationsTag');
+                    cards[2].querySelector('h2').innerText = t('foundationsTitle');
+                    cards[2].querySelector('p').innerText = t('foundationsDesc');
+                }
+            },
+
             bindEvents: function() {
                 document.querySelectorAll('.track-card').forEach(card => {
                     card.addEventListener('click', (e) => this.ScenarioRenderer.initTrack(e.currentTarget.getAttribute('data-track')), {passive:true});
@@ -643,7 +822,7 @@
                 this.DOM.btnReset.addEventListener('click', () => {
                     if (this.state.currentScenarioCache.type === 'code') {
                         this.state.editorInstance.setValue(this.state.currentScenarioCache.initialCode);
-                        this.Terminal.log("[System] Workspace reverted to initial state.", 'warn');
+                        this.Terminal.log(LAB_SETTINGS.lang === 'ar' ? "[النظام] تمت إعادة بيئة العمل للوضع الابتدائي." : "[System] Workspace reverted to initial state.", 'warn');
                     }
                 });
                 
@@ -687,11 +866,11 @@
                 
                 if (App.state.isTeachingMode) {
                     App.DOM.btnTabTheory.disabled = false;
-                    App.DOM.btnTabTheory.innerText = "Theory 📖";
+                    App.DOM.btnTabTheory.innerText = t('tabTheoryOpen');
                     if(App.state.currentTrack) this.populateTheory();
                 } else {
                     App.DOM.btnTabTheory.disabled = true;
-                    App.DOM.btnTabTheory.innerText = "Theory 🔒";
+                    App.DOM.btnTabTheory.innerText = t('tabTheoryLocked');
                     this.switchTab(App.DOM.tabBtns[0]); 
                 }
             },
@@ -726,17 +905,17 @@
                 if(!sc) return;
                 App.DOM.theoryContent.innerHTML = `
                     <details class="theory-section" open>
-                        <summary>Core Concept</summary>
+                        <summary>${t('coreConcept')}</summary>
                         <div class="theory-inner">${sc.theory.concept}</div>
                     </details>
                     ${sc.theory.diagram ? `<div class="theory-diagram">${sc.theory.diagram}</div>` : ''}
                     <details class="theory-section">
-                        <summary>Common Pitfalls</summary>
+                        <summary>${t('commonPitfalls')}</summary>
                         <div class="theory-inner">${sc.theory.pitfalls}</div>
                     </details>
                     ${sc.theory.enterpriseContext ? `
                     <details class="theory-section">
-                        <summary>Enterprise Context</summary>
+                        <summary>${t('enterpriseContext')}</summary>
                         <div class="theory-inner">🏢 ${sc.theory.enterpriseContext}</div>
                     </details>` : ''}
                 `;
@@ -745,7 +924,7 @@
             showFeedback: function(isCorrect, text) {
                 App.DOM.feedbackBox.style.display = 'block';
                 App.DOM.feedbackBox.className = `feedback-alert ${isCorrect ? 'success' : 'error'}`;
-                App.DOM.feedbackBox.innerHTML = `<strong>${isCorrect ? '✔ Validated:' : '✖ Error:'}</strong> ${text}`;
+                App.DOM.feedbackBox.innerHTML = `<strong>${isCorrect ? t('validated') : t('error')}</strong> ${text}`;
                 
                 if(!isCorrect) Utils.shakeElement(App.DOM.feedbackBox);
                 Utils.smoothScroll(App.DOM.panelContentArea);
@@ -757,7 +936,7 @@
 
                     if(!App.state.isTeachingMode) {
                         App.DOM.btnTabTheory.disabled = false;
-                        App.DOM.btnTabTheory.innerText = "Theory 📖 (Unlocked)";
+                        App.DOM.btnTabTheory.innerText = t('tabTheoryUnlocked');
                         this.populateTheory();
                     }
                 }
@@ -844,7 +1023,7 @@
                 App.DOM.feedbackBox.style.display = 'none';
                 App.DOM.btnSubmit.style.display = 'flex';
                 App.DOM.btnSubmit.disabled = false;
-                App.DOM.btnSubmit.innerText = "Execute Validation";
+                App.DOM.btnSubmit.innerText = t('execute');
                 App.DOM.btnNext.style.display = 'none';
                 App.DOM.hintsContainer.innerHTML = '';
                 App.DOM.btnRevealHint.style.display = 'flex';
@@ -852,8 +1031,8 @@
                 
                 if(!App.state.isTeachingMode) {
                     App.DOM.btnTabTheory.disabled = true;
-                    App.DOM.btnTabTheory.innerText = "Theory 🔒";
-                    App.DOM.theoryContent.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">Solve the challenge to unlock the theoretical breakdown.</p>';
+                    App.DOM.btnTabTheory.innerText = t('tabTheoryLocked');
+                    App.DOM.theoryContent.innerHTML = `<p style="color: var(--text-secondary); font-style: italic;">${t('solveToUnlock')}</p>`;
                 }
 
                 // Progress Bar Update
@@ -895,7 +1074,7 @@
                     setTimeout(() => { App.state.editorInstance.refresh(); }, 50);
                     
                     App.Terminal.clear();
-                    App.Terminal.log(`[TamheedOS] Sandboxing environment for ${sc.filename}...`, 'sys');
+                    App.Terminal.log(LAB_SETTINGS.lang === 'ar' ? `[TamheedOS] تجهيز البيئة المعزولة للملف ${sc.filename}...` : `[TamheedOS] Sandboxing environment for ${sc.filename}...`, 'sys');
                 } else {
                     App.DOM.ideContainer.style.display = 'none';
                     App.DOM.quizContainer.style.display = 'block';
@@ -922,7 +1101,7 @@
                         App.DOM.quizOptionsArea.appendChild(div);
                     });
                 } else if (sc.type === 'short-answer') {
-                    App.DOM.quizOptionsArea.innerHTML = `<input type="text" class="quiz-text-input" id="q_short_ans" placeholder="Type your answer here..." autocomplete="off">`;
+                    App.DOM.quizOptionsArea.innerHTML = `<input type="text" class="quiz-text-input" id="q_short_ans" placeholder="${t('typeAnswerPlaceholder')}" autocomplete="off">`;
                     setTimeout(() => {
                         document.getElementById('q_short_ans').addEventListener('keydown', (e) => {
                             if(e.key === 'Enter') App.DOM.btnSubmit.click();
@@ -1002,11 +1181,11 @@
                 App.DOM.badgesContainer.innerHTML = '';
                 let badges = [];
                 
-                if(App.state.sessionMetrics.flawless === SCENARIOS[App.state.currentTrack].length) badges.push("🎯 Flawless Execution");
-                if(App.state.sessionMetrics.hintsUsed === 0) badges.push("🧠 Independent Thinker");
-                if(App.state.isTeachingMode) badges.push("📚 Theory Master");
-                if(App.state.secondsElapsed < (SCENARIOS[App.state.currentTrack].length * 60)) badges.push("⚡ Speed Runner");
-                if(badges.length === 0) badges.push("✅ Track Completed");
+                if(App.state.sessionMetrics.flawless === SCENARIOS[App.state.currentTrack].length) badges.push(LAB_SETTINGS.lang === 'ar' ? "🎯 تنفيذ مثالي" : "🎯 Flawless Execution");
+                if(App.state.sessionMetrics.hintsUsed === 0) badges.push(LAB_SETTINGS.lang === 'ar' ? "🧠 تفكير مستقل" : "🧠 Independent Thinker");
+                if(App.state.isTeachingMode) badges.push(LAB_SETTINGS.lang === 'ar' ? "📚 إتقان نظري" : "📚 Theory Master");
+                if(App.state.secondsElapsed < (SCENARIOS[App.state.currentTrack].length * 60)) badges.push(LAB_SETTINGS.lang === 'ar' ? "⚡ سرعة تنفيذ" : "⚡ Speed Runner");
+                if(badges.length === 0) badges.push(LAB_SETTINGS.lang === 'ar' ? "✅ تم إكمال المسار" : "✅ Track Completed");
 
                 badges.forEach((b, idx) => {
                     const el = document.createElement('div');
@@ -1039,20 +1218,20 @@
                 App.state.attempts++;
                 App.state.sessionMetrics.totalAttempts++;
                 App.DOM.btnSubmit.disabled = true;
-                App.DOM.btnSubmit.innerText = "Evaluating...";
+                App.DOM.btnSubmit.innerText = t('evaluating');
 
                 let isCorrect = false;
 
                 try {
                     if (sc.type === 'code') {
                         const code = App.state.editorInstance.getValue();
-                        await App.Terminal.log("> Executing static analysis and unit tests...", 'cmd');
+                        await App.Terminal.log(LAB_SETTINGS.lang === 'ar' ? "> تشغيل التحليل الثابت واختبارات التحقق..." : "> Executing static analysis and unit tests...", 'cmd');
                         await new Promise(r => setTimeout(r, 400));
                         
                         isCorrect = sc.validator(code);
                         
-                        if(isCorrect) await App.Terminal.log("[Compiler] ✔ PASS: Solution satisfies architectural requirements.", 'suc');
-                        else await App.Terminal.log("[Compiler] ✖ FAIL: Requirements not met. Review constraints.", 'err');
+                        if(isCorrect) await App.Terminal.log(LAB_SETTINGS.lang === 'ar' ? "[Compiler] ✔ نجاح: الحل يحقق المتطلبات." : "[Compiler] ✔ PASS: Solution satisfies architectural requirements.", 'suc');
+                        else await App.Terminal.log(LAB_SETTINGS.lang === 'ar' ? "[Compiler] ✖ فشل: المتطلبات غير مكتملة." : "[Compiler] ✖ FAIL: Requirements not met. Review constraints.", 'err');
                     } 
                     else if (sc.type === 'mcq') {
                         const selected = document.querySelector('input[name="q_opt"]:checked');
@@ -1080,8 +1259,8 @@
                         
                         App.state.score++; 
                         
-                        App.UI.showFeedback(true, "Solution approved.");
-                        App.DOM.btnSubmit.innerText = "Execute Validation";
+                        App.UI.showFeedback(true, t('approved'));
+                        App.DOM.btnSubmit.innerText = t('execute');
                         
                         if(sc.type !== 'code' && App.state.currentIndex < SCENARIOS[App.state.currentTrack].length - 1) {
                            App.state.autoAdvanceTimer = setTimeout(() => {
@@ -1089,14 +1268,14 @@
                            }, 2000); 
                         }
                     } else {
-                        App.UI.showFeedback(false, "Incorrect. Check the hints tab if you require assistance.");
+                        App.UI.showFeedback(false, t('incorrect'));
                         setTimeout(() => {
                             App.DOM.btnSubmit.style.display = 'flex';
                             App.DOM.btnNext.style.display = 'none';
                             App.DOM.btnReset.style.display = 'flex';
                             App.DOM.feedbackBox.style.display = 'none';
                             App.DOM.btnSubmit.disabled = false;
-                            App.DOM.btnSubmit.innerText = "Execute Validation";
+                            App.DOM.btnSubmit.innerText = t('execute');
                             App.state.isProcessing = false;
                             
                             if(sc.type === 'mcq') document.querySelectorAll('.quiz-option').forEach(el => { el.classList.remove('locked', 'correct-ans', 'wrong-ans'); });
@@ -1110,7 +1289,7 @@
                 } catch(e) {
                     console.error("Execution Engine Error:", e);
                     App.DOM.btnSubmit.disabled = false;
-                    App.DOM.btnSubmit.innerText = "Execute Validation";
+                    App.DOM.btnSubmit.innerText = t('execute');
                 }
                 
                 App.state.isProcessing = false;

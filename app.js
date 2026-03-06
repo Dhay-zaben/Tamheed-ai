@@ -3250,6 +3250,7 @@
             ${user && user.role === "student" ? `<button class="btn btn-ghost ${navActive("profile")}" data-nav="/profile">${this.t("profile")}</button>` : ""}
             <nav class="${navClass}">
             ${isPublic ? `
+              <button class="${navActive("landing")}" data-nav="/">${this.state.settings.language === "ar" ? "الرئيسية" : "Home"}</button>
               <button class="${navActive("plans")}" data-nav="/plans">${this.t("navPlans")}</button>
               <button class="${navActive("about")}" data-nav="/about">${this.t("navAbout")}</button>
             ` : `
@@ -3679,9 +3680,11 @@
     }
 
    microLabsTestPage() {
+      const lang = this.state.settings.language === "en" ? "en" : "ar";
+      const theme = this.state.settings.theme === "dark" ? "dark" : "light";
       return `
         <div style="width: 100%; height: calc(100vh - 80px); border-radius: 16px; overflow: hidden; background: transparent; display: flex; flex-direction: column;">
-            <iframe src="microlab.html" style="width: 100%; height: 100%; border: none; flex: 1;" title="Tamheed Microlab"></iframe>
+            <iframe src="Microlab.html?lang=${lang}&theme=${theme}" style="width: 100%; height: 100%; border: none; flex: 1;" title="Tamheed Microlab"></iframe>
         </div>
       `;
     }
